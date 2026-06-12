@@ -2,6 +2,14 @@
 
 Telegram bot for sharing secrets through one-time links, with per-user secret storage.
 
+**Live bot: [@secret_manager_bot](https://t.me/secret_manager_bot)**
+
+## How to use
+
+1. Open [@secret_manager_bot](https://t.me/secret_manager_bot) and press **Start**.
+2. Send a value (or `key value` to also save it) — the bot replies with a one-time link and a ready-to-copy `curl` snippet.
+3. Share the link. Opening it shows a confirmation page; the secret is revealed only after pressing **Reveal secret** (a `POST` to the same url), so link-preview crawlers cannot burn it. Scripts can skip the page entirely: `curl -X POST <link>`.
+
 ## What it does
 
 - Send the bot `key value` — the pair is saved for your Telegram account and the bot replies with a **one-time link** to the value.
