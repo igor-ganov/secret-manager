@@ -1,0 +1,59 @@
+name: CI / Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Never let two deploys race against the same Worker / D1 database.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Test & type-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun test
+
+  deploy:
+    name: Migrate & deploy
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      # Keep the job green until the deploy secret exists: without a token we
+      # cannot reach Cloudflare, so skip deploy steps and surface a warning.
+      - id: guard
+        run: |
+          if [ -z "${CLOUDFLARE_API_TOKEN}" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::CLOUDFLARE_API_TOKEN is not set — skipping deploy. Add it in repo Settings → Secrets and Variables → Actions to enable automatic deploys."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.guard.outputs.ready == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - if: steps.guard.outputs.ready == 'true'
+        run: bun install --frozen-lockfile
+      # Schema migrations are idempotent (CREATE TABLE IF NOT EXISTS),
+      # so applying them on every deploy is safe and keeps D1 in sync.
+      - if: steps.guard.outputs.ready == 'true'
+        run: bun run db:migrate
+      - if: steps.guard.outputs.ready == 'true'
+        run: bun run deploy
