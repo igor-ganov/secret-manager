@@ -16,7 +16,7 @@ export const createD1OneTimeLinkStore = ({
   now,
   createToken,
 }: D1OneTimeLinkStoreOptions): OneTimeLinkStore => {
-  const issue = async (value: string): Promise<string> => {
+  const issue = async (value: string, overrideTtlMs?: number): Promise<string> => {
     const token = createToken();
     await database
       .prepare('DELETE FROM one_time_links WHERE expires_at <= ?1')
@@ -24,7 +24,7 @@ export const createD1OneTimeLinkStore = ({
       .run();
     await database
       .prepare('INSERT INTO one_time_links (token, value, expires_at) VALUES (?1, ?2, ?3)')
-      .bind(token, value, now() + ttlMs)
+      .bind(token, value, now() + (overrideTtlMs ?? ttlMs))
       .run();
     return token;
   };

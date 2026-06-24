@@ -2,8 +2,24 @@ import { InlineKeyboard, Keyboard } from 'grammy';
 import { buildCallbackData } from './callback-data.ts';
 
 export const LIST_BUTTON_LABEL = 'List';
+export const SETTINGS_BUTTON_LABEL = 'Settings';
 
-export const mainKeyboard = new Keyboard().text(LIST_BUTTON_LABEL).resized().persistent();
+/* Offered link lifetimes, in minutes; 1440 is one day. Discrete presets keep
+   the choice unambiguous so a typed number is never mistaken for a secret. */
+export const TTL_PRESETS_MINUTES = [1, 5, 15, 30, 60, 1440] as const;
+
+export const mainKeyboard = new Keyboard()
+  .text(LIST_BUTTON_LABEL)
+  .text(SETTINGS_BUTTON_LABEL)
+  .resized()
+  .persistent();
+
+export const buildSettingsKeyboard = (currentMinutes: number): InlineKeyboard =>
+  TTL_PRESETS_MINUTES.reduce((keyboard, minutes, index) => {
+    const label = `${minutes === currentMinutes ? '✓ ' : ''}${minutes} min`;
+    keyboard.text(label, buildCallbackData({ kind: 'set-ttl', minutes }));
+    return (index + 1) % 3 === 0 ? keyboard.row() : keyboard;
+  }, new InlineKeyboard());
 
 export const buildListKeyboard = (keys: readonly string[]): InlineKeyboard =>
   keys.reduce(

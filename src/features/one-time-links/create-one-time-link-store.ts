@@ -31,10 +31,10 @@ export const createOneTimeLinkStore = ({
     }
   };
 
-  const issue = async (value: string): Promise<string> => {
+  const issue = async (value: string, overrideTtlMs?: number): Promise<string> => {
     sweepExpired();
     const token = createToken();
-    secrets.set(token, { value, expiresAt: now() + ttlMs });
+    secrets.set(token, { value, expiresAt: now() + (overrideTtlMs ?? ttlMs) });
     return token;
   };
 

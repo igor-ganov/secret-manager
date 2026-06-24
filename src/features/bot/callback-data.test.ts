@@ -10,6 +10,7 @@ const ROUND_TRIP_ACTIONS: readonly CallbackAction[] = [
   { kind: 'set', key: 'api-key' },
   { kind: 'delete-request', key: 'api-key' },
   { kind: 'delete-confirm', key: 'api-key' },
+  { kind: 'set-ttl', minutes: 15 },
   { kind: 'cancel-set' },
   { kind: 'cancel-delete' },
   { kind: 'noop' },
@@ -27,5 +28,8 @@ describe('callback data', () => {
     expect(parseCallbackData('x:whatever')).toBeUndefined();
     expect(parseCallbackData('')).toBeUndefined();
     expect(parseCallbackData('g:')).toBeUndefined();
+    expect(parseCallbackData('t:abc')).toBeUndefined();
+    expect(parseCallbackData('t:0')).toBeUndefined();
+    expect(parseCallbackData('t:-5')).toBeUndefined();
   });
 });

@@ -8,6 +8,7 @@ import {
 import { createOneTimeLinkStore } from './features/one-time-links/create-one-time-link-store.ts';
 import { createToken } from './features/one-time-links/create-token.ts';
 import { createSecretStore } from './features/secrets/create-secret-store.ts';
+import { createSettingsStore } from './features/settings/create-settings-store.ts';
 
 const config = loadConfig(Bun.env);
 
@@ -19,6 +20,7 @@ const links = createOneTimeLinkStore({
 
 const secrets = createSecretStore(config.databasePath);
 const pendingSets = createPendingSetStore();
+const settings = createSettingsStore(config.databasePath);
 
 const server = Bun.serve({
   port: config.port,
@@ -30,6 +32,7 @@ const bot = createBot({
   secrets,
   links,
   pendingSets,
+  settings,
   buildLinkUrl: (token) => `${config.baseUrl}${LINK_PATH_PREFIX}${token}`,
   linkTtlMinutes: config.linkTtlMinutes,
 });
@@ -47,6 +50,7 @@ process.on('SIGTERM', () => void shutdown('SIGTERM'));
 await bot.api.setMyCommands([
   { command: 'start', description: 'Show help and the List button' },
   { command: 'list', description: 'List your saved keys' },
+  { command: 'settings', description: 'Set how long one-time links stay valid' },
 ]);
 
 console.log(`Link server listening on ${server.url}`);

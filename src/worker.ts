@@ -9,6 +9,7 @@ import {
 import { createD1OneTimeLinkStore } from './features/one-time-links/create-d1-one-time-link-store.ts';
 import { createToken } from './features/one-time-links/create-token.ts';
 import { createD1SecretStore } from './features/secrets/create-d1-secret-store.ts';
+import { createD1SettingsStore } from './features/settings/create-d1-settings-store.ts';
 
 export const WEBHOOK_PATH = '/webhook';
 
@@ -42,6 +43,7 @@ const createApp = (env: WorkerEnv): App => {
     secrets: createD1SecretStore(env.DB),
     links,
     pendingSets: createD1PendingSetStore(env.DB),
+    settings: createD1SettingsStore(env.DB),
     buildLinkUrl: (token) => `${currentOrigin}${LINK_PATH_PREFIX}${token}`,
     linkTtlMinutes,
   });
