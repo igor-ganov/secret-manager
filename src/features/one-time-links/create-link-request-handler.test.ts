@@ -13,8 +13,14 @@ const createFixture = () => {
   return { links, handle };
 };
 
-const requestFor = (path: string, method = 'GET'): Request =>
-  new Request(`http://localhost${path}`, { method });
+const HTML_ACCEPT = { accept: 'text/html,application/xhtml+xml' };
+
+const requestFor = (
+  path: string,
+  method = 'GET',
+  headers?: Record<string, string>,
+): Request =>
+  new Request(`http://localhost${path}`, headers ? { method, headers } : { method });
 
 describe('createLinkRequestHandler', () => {
   test('GET shows a confirmation page without consuming the secret', async () => {
@@ -43,6 +49,35 @@ describe('createLinkRequestHandler', () => {
     const second = await handle(requestFor(`/s/${token}`, 'POST'));
     expect(second.status).toBe(410);
     expect(await second.text()).not.toContain('top-secret');
+  });
+
+  test('POST from a script returns the bare value as text/plain', async () => {
+    const { links, handle } = createFixture();
+    const token = await links.issue('top-secret');
+
+    const response = await handle(requestFor(`/s/${token}`, 'POST'));
+    expect(response.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+    expect(await response.text()).toBe('top-secret\n');
+  });
+
+  test('POST from a browser returns the styled HTML secret page', async () => {
+    const { links, handle } = createFixture();
+    const token = await links.issue('top-secret');
+
+    const response = await handle(requestFor(`/s/${token}`, 'POST', HTML_ACCEPT));
+    expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    const body = await response.text();
+    expect(body).toContain('<pre>top-secret</pre>');
+  });
+
+  test('a consumed link responds 410 as text/plain to a script', async () => {
+    const { links, handle } = createFixture();
+    const token = await links.issue('top-secret');
+    await handle(requestFor(`/s/${token}`, 'POST'));
+
+    const response = await handle(requestFor(`/s/${token}`, 'POST'));
+    expect(response.status).toBe(410);
+    expect(response.headers.get('content-type')).toBe('text/plain; charset=utf-8');
   });
 
   test('GET responds 410 after the secret has been consumed', async () => {
@@ -76,7 +111,7 @@ describe('createLinkRequestHandler', () => {
   test('escapes html in the secret value', async () => {
     const { links, handle } = createFixture();
     const token = await links.issue('<script>alert(1)</script>');
-    const response = await handle(requestFor(`/s/${token}`, 'POST'));
+    const response = await handle(requestFor(`/s/${token}`, 'POST', HTML_ACCEPT));
     const body = await response.text();
     expect(body).not.toContain('<script>alert(1)</script>');
     expect(body).toContain('&lt;script&gt;');
