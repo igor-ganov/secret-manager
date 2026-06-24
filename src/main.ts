@@ -1,5 +1,5 @@
 import { loadConfig } from './config/load-config.ts';
-import { createBot } from './features/bot/create-bot.ts';
+import { BOT_COMMANDS, createBot } from './features/bot/create-bot.ts';
 import { createPendingSetStore } from './features/bot/create-pending-set-store.ts';
 import {
   createLinkRequestHandler,
@@ -47,11 +47,7 @@ const shutdown = async (signal: string): Promise<void> => {
 process.on('SIGINT', () => void shutdown('SIGINT'));
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
-await bot.api.setMyCommands([
-  { command: 'start', description: 'Show help and the List button' },
-  { command: 'list', description: 'List your saved keys' },
-  { command: 'settings', description: 'Set how long one-time links stay valid' },
-]);
+await bot.api.setMyCommands([...BOT_COMMANDS]);
 
 console.log(`Link server listening on ${server.url}`);
 console.log('Starting Telegram bot (long polling)…');

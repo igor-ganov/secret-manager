@@ -1,5 +1,5 @@
 import { webhookCallback } from 'grammy';
-import { createBot } from './features/bot/create-bot.ts';
+import { BOT_COMMANDS, createBot } from './features/bot/create-bot.ts';
 import { createD1PendingSetStore } from './features/bot/create-d1-pending-set-store.ts';
 import type { D1Database } from './features/cloudflare/d1-types.ts';
 import {
@@ -23,12 +23,18 @@ export type WorkerEnv = {
 type App = {
   readonly handleWebhook: (request: Request) => Promise<Response>;
   readonly handleLink: (request: Request) => Promise<Response>;
+  readonly registerCommands: () => Promise<void>;
 };
+
+type ExecutionContext = { readonly waitUntil: (promise: Promise<unknown>) => void };
 
 /* The worker learns its own public origin from the incoming request,
    so generated links need no BASE_URL configuration. */
 let currentOrigin = '';
 let cachedApp: App | undefined;
+/* Telegram stores the command menu server-side, so registering it once per
+   isolate is enough; a failed attempt resets the flag to retry. */
+let commandsRegistered = false;
 
 const createApp = (env: WorkerEnv): App => {
   const linkTtlMinutes = Number(env.LINK_TTL_MINUTES ?? '5');
@@ -47,20 +53,34 @@ const createApp = (env: WorkerEnv): App => {
     buildLinkUrl: (token) => `${currentOrigin}${LINK_PATH_PREFIX}${token}`,
     linkTtlMinutes,
   });
+  const registerCommands = async (): Promise<void> => {
+    try {
+      await bot.api.setMyCommands([...BOT_COMMANDS]);
+    } catch (error) {
+      commandsRegistered = false;
+      console.error('Failed to register bot commands:', error);
+    }
+  };
+
   return {
     handleWebhook: webhookCallback(bot, 'std/http', { secretToken: env.WEBHOOK_SECRET }),
     handleLink: createLinkRequestHandler(links),
+    registerCommands,
   };
 };
 
 export default {
-  fetch: async (request: Request, env: WorkerEnv): Promise<Response> => {
+  fetch: async (request: Request, env: WorkerEnv, ctx: ExecutionContext): Promise<Response> => {
     const url = new URL(request.url);
     currentOrigin = url.origin;
-    cachedApp ??= createApp(env);
-    if (request.method === 'POST' && url.pathname === WEBHOOK_PATH) {
-      return cachedApp.handleWebhook(request);
+    const app = (cachedApp ??= createApp(env));
+    if (!commandsRegistered) {
+      commandsRegistered = true;
+      ctx.waitUntil(app.registerCommands());
     }
-    return cachedApp.handleLink(request);
+    if (request.method === 'POST' && url.pathname === WEBHOOK_PATH) {
+      return app.handleWebhook(request);
+    }
+    return app.handleLink(request);
   },
 };

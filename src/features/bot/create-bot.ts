@@ -1,5 +1,5 @@
 import { Bot, type Context, type Filter, type InlineKeyboard } from 'grammy';
-import type { UserFromGetMe } from 'grammy/types';
+import type { BotCommand, UserFromGetMe } from 'grammy/types';
 import type { OneTimeLinkStore } from '../one-time-links/one-time-link-store.ts';
 import type { SecretStore } from '../secrets/secret-store.ts';
 import { buildLinkMessage, type LinkMessage } from './build-link-message.ts';
@@ -10,13 +10,18 @@ import {
   buildDeleteConfirmKeyboard,
   buildListKeyboard,
   buildSettingsKeyboard,
-  LIST_BUTTON_LABEL,
-  mainKeyboard,
-  SETTINGS_BUTTON_LABEL,
 } from './keyboards.ts';
 import { parseTextMessage } from './parse-text-message.ts';
 import type { PendingSetStore } from './pending-set-store.ts';
 import type { SettingsStore } from '../settings/settings-store.ts';
+
+/* Registered with Telegram so /start /list /settings appear in the native
+   command menu and the Menu button; the bot has no reply keyboard. */
+export const BOT_COMMANDS: readonly BotCommand[] = [
+  { command: 'start', description: 'Show help' },
+  { command: 'list', description: 'List your saved keys' },
+  { command: 'settings', description: 'Set how long one-time links stay valid' },
+];
 
 export type BotDependencies = {
   readonly token: string;
@@ -37,8 +42,8 @@ const HELP_TEXT = [
   'Send me a single `value` — I will reply with a one-time link without saving anything.',
   `Every link lives ${'%TTL%'} minutes by default and can be opened exactly once.`,
   'For your safety, I delete your message right after reading it, so the secret never lingers in this chat.',
-  `Press “${LIST_BUTTON_LABEL}” or use /list to manage your saved keys.`,
-  `Press “${SETTINGS_BUTTON_LABEL}” or use /settings to change how long links stay valid.`,
+  'Use /list to manage your saved keys.',
+  'Use /settings to change how long links stay valid.',
 ].join('\n');
 
 export const createBot = ({
@@ -97,7 +102,8 @@ export const createBot = ({
   bot.command('start', async (ctx) => {
     await ctx.reply(HELP_TEXT.replace('%TTL%', String(linkTtlMinutes)), {
       parse_mode: 'Markdown',
-      reply_markup: mainKeyboard,
+      /* Clear the legacy persistent keyboard for users who still have it. */
+      reply_markup: { remove_keyboard: true },
     });
   });
 
@@ -120,16 +126,6 @@ export const createBot = ({
   bot.on('message:text', async (ctx) => {
     const userId = ctx.from.id;
     const text = ctx.message.text;
-
-    if (text.toLowerCase() === LIST_BUTTON_LABEL.toLowerCase()) {
-      await sendList((body, options) => ctx.reply(body, options), userId);
-      return;
-    }
-
-    if (text.toLowerCase() === SETTINGS_BUTTON_LABEL.toLowerCase()) {
-      await sendSettings((body, options) => ctx.reply(body, options), userId);
-      return;
-    }
 
     const pendingKey = await pendingSets.take(userId);
     if (pendingKey !== undefined) {

@@ -210,11 +210,13 @@ describe('createBot link-lifetime settings', () => {
     expect(callbackDataValues(reply)).toEqual(['t:1', 't:5', 't:15', 't:30', 't:60', 't:1440']);
   });
 
-  test('the Settings button shows the menu just like the command', async () => {
+  test('a typed "Settings" message is a secret now, not a menu shortcut', async () => {
     const { bot, calls } = buildBot();
     await bot.handleUpdate(textUpdate('Settings'));
 
-    expect(callbackDataValues(messageCalls(calls)[0])).toContain('t:30');
+    const reply = messageCalls(calls)[0];
+    expect(reply?.payload['text']).toContain('One-time link');
+    expect(callbackDataValues(reply)).toEqual([]);
   });
 
   test('choosing a preset persists the new lifetime and refreshes the menu', async () => {
