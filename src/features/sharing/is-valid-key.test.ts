@@ -15,11 +15,18 @@ describe('isValidKey', () => {
   });
 
   test('measures multibyte characters in bytes, not characters', () => {
-    expect(isValidKey('ключ'.repeat(8))).toBe(false);
-    expect(isValidKey('ключ')).toBe(true);
+    /* U+00E9 is one character but two UTF-8 bytes. */
+    const twoByteCharacter = 'é';
+    expect(isValidKey(twoByteCharacter.repeat(32))).toBe(false);
+    expect(isValidKey(twoByteCharacter.repeat(31))).toBe(true);
   });
 
   test('rejects an empty key', () => {
     expect(isValidKey('')).toBe(false);
+  });
+
+  test('rejects keys containing whitespace', () => {
+    expect(isValidKey('two words')).toBe(false);
+    expect(isValidKey('tab\tkey')).toBe(false);
   });
 });

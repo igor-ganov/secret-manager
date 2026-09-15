@@ -6,6 +6,7 @@ import type { PendingSetStore } from './pending-set-store.ts';
 import type { OneTimeLinkStore } from '../one-time-links/one-time-link-store.ts';
 import type { SecretStore } from '../secrets/secret-store.ts';
 import type { SettingsStore } from '../settings/settings-store.ts';
+import { createSharingService } from '../sharing/create-sharing-service.ts';
 
 const BOT_INFO: UserFromGetMe = {
   id: 1,
@@ -78,11 +79,14 @@ const buildBot = () => {
   const fakes = createFakes();
   const bot = createBot({
     token: '12345:TEST',
-    secrets: fakes.secrets,
-    links: fakes.links,
+    sharing: createSharingService({
+      secrets: fakes.secrets,
+      links: fakes.links,
+      settings: fakes.settings,
+      buildLinkUrl: (token) => `https://example.test/s/${token}`,
+      linkTtlMinutes: 5,
+    }),
     pendingSets: fakes.pendingSets,
-    settings: fakes.settings,
-    buildLinkUrl: (token) => `https://example.test/s/${token}`,
     linkTtlMinutes: 5,
     botInfo: BOT_INFO,
   });

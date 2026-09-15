@@ -1,0 +1,78 @@
+import { decodeEmpty } from '../../features/http-api/decoders/decode-empty.ts';
+import { decodeIssuedLink } from '../../features/http-api/decoders/decode-issued-link.ts';
+import { decodeKeys } from '../../features/http-api/decoders/decode-keys.ts';
+import { decodeMe } from '../../features/http-api/decoders/decode-me.ts';
+import { decodeSettings } from '../../features/http-api/decoders/decode-settings.ts';
+import { decodeTokens } from '../../features/http-api/decoders/decode-tokens.ts';
+import { decodeValue } from '../../features/http-api/decoders/decode-value.ts';
+import type { Decoder } from '../../features/http-api/decoders/decoder.ts';
+import { readErrorMessage } from '../../features/http-api/read-error-message.ts';
+import type { ApiClient, ApiCredentials, ApiResult } from './api-client.ts';
+
+export type FetchFn = (input: string, init: RequestInit) => Promise<Response>;
+
+const UNEXPECTED = 'Unexpected response from the server.';
+
+const parseJson = (text: string): unknown => {
+  try {
+    return JSON.parse(text || '{}');
+  } catch {
+    return undefined;
+  }
+};
+
+const decodeResponse = async <T>(response: Response, decode: Decoder<T>): Promise<ApiResult<T>> => {
+  const body = parseJson(await response.text());
+  if (response.status === 401) {
+    return { ok: false, error: { kind: 'unauthorized' } };
+  }
+  if (!response.ok) {
+    return { ok: false, error: { kind: 'rejected', message: readErrorMessage(body, response.status) } };
+  }
+  const value = decode(body);
+  return value === undefined
+    ? { ok: false, error: { kind: 'rejected', message: UNEXPECTED } }
+    : { ok: true, value };
+};
+
+const describeFailure = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
+export const createApiClient =
+  (fetchFn: FetchFn) =>
+  ({ serverUrl, token }: ApiCredentials): ApiClient => {
+    const base = serverUrl.replace(/\/+$/, '');
+
+    const call = async <T>(
+      method: string,
+      path: string,
+      decode: Decoder<T>,
+      body?: unknown,
+    ): Promise<ApiResult<T>> => {
+      const init: RequestInit = {
+        method,
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      };
+      try {
+        return await decodeResponse(await fetchFn(`${base}${path}`, init), decode);
+      } catch (error) {
+        return { ok: false, error: { kind: 'unreachable', message: `Cannot reach ${base}: ${describeFailure(error)}` } };
+      }
+    };
+
+    const secretPath = (key: string): string => `/api/secrets/${encodeURIComponent(key)}`;
+
+    return {
+      me: () => call('GET', '/api/me', decodeMe),
+      keys: () => call('GET', '/api/secrets', decodeKeys),
+      read: (key) => call('GET', secretPath(key), decodeValue),
+      share: (key, value) => call('POST', '/api/links', decodeIssuedLink, { key, value }),
+      linkFor: (key) => call('POST', `${secretPath(key)}/link`, decodeIssuedLink),
+      remove: (key) => call('DELETE', secretPath(key), decodeEmpty),
+      settings: () => call('GET', '/api/settings', decodeSettings),
+      saveSettings: (linkTtlMinutes) => call('PUT', '/api/settings', decodeEmpty, { linkTtlMinutes }),
+      tokens: () => call('GET', '/api/tokens', decodeTokens),
+      revokeToken: (id) => call('DELETE', `/api/tokens/${encodeURIComponent(id)}`, decodeEmpty),
+    };
+  };

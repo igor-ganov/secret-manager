@@ -20,3 +20,17 @@ CREATE TABLE IF NOT EXISTS user_settings (
   user_id INTEGER PRIMARY KEY,
   link_ttl_minutes INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS api_tokens (
+  token_hash TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  label TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS api_tokens_user ON api_tokens (user_id);
+
+CREATE TABLE IF NOT EXISTS users (
+  user_id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL
+);
