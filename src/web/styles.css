@@ -141,3 +141,13 @@ legend { font-size: .9rem; color: var(--muted); margin-bottom: .5rem; padding: 0
 @media (max-width: 30rem) {
   li { grid-template-columns: 1fr; }
 }
+
+h3 { font-size: 1rem; margin: 1rem 0 .5rem; color: var(--muted); }
+.banner { border: 1px solid var(--accent); border-radius: var(--radius); padding: .75rem 1rem; }
+.highlight { border-color: var(--accent); }
+.qr { display: block; width: 12rem; max-width: 100%; margin: .5rem 0; background: #fff; border-radius: var(--radius); }
+form.inline { margin-top: .5rem; }
+
+details.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1.25rem; }
+details.card summary { cursor: pointer; font-weight: 600; }
+details.card > :not(summary) { margin-top: .75rem; }

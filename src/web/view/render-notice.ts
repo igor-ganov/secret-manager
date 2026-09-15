@@ -1,8 +1,9 @@
 import type { Notice } from '../state/app-state.ts';
 import type { Actions } from './actions.ts';
 import type { H } from './h.ts';
-import { renderFreshToken } from './render-fresh-token.ts';
+import { renderEnrollmentNotice } from './render-enrollment-notice.ts';
 import { renderLinkResult } from './render-link-result.ts';
+import { renderRecoveryNotice } from './render-recovery-notice.ts';
 
 const content = (h: H, actions: Actions, notice: Notice): readonly Node[] => {
   switch (notice.kind) {
@@ -12,8 +13,10 @@ const content = (h: H, actions: Actions, notice: Notice): readonly Node[] => {
       return [h('p', {}, notice.text)];
     case 'link':
       return renderLinkResult(h, actions, notice.intro, notice.link);
-    case 'token':
-      return renderFreshToken(h, actions, notice.token);
+    case 'recovery':
+      return renderRecoveryNotice(h, actions, notice.code);
+    case 'enrollment':
+      return renderEnrollmentNotice(h, actions, notice.enrollment);
   }
 };
 
@@ -23,7 +26,8 @@ const className = (notice: Notice): string => {
       return '';
     case 'info':
     case 'link':
-    case 'token':
+    case 'recovery':
+    case 'enrollment':
       return 'notice';
   }
 };

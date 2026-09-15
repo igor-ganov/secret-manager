@@ -22,5 +22,12 @@ export const createD1SettingsStore = (database: D1Database): SettingsStore => {
       .run();
   };
 
-  return { getTtlMinutes, setTtlMinutes };
+  const reassign = async (fromUserId: number, toUserId: number): Promise<void> => {
+    await database
+      .prepare('UPDATE OR IGNORE user_settings SET user_id = ?1 WHERE user_id = ?2')
+      .bind(toUserId, fromUserId)
+      .run();
+  };
+
+  return { getTtlMinutes, setTtlMinutes, reassign };
 };

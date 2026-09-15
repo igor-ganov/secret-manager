@@ -30,7 +30,55 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 
 CREATE INDEX IF NOT EXISTS api_tokens_user ON api_tokens (user_id);
 
-CREATE TABLE IF NOT EXISTS users (
-  user_id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL
+CREATE TABLE IF NOT EXISTS accounts (
+  account_id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  user_handle TEXT NOT NULL UNIQUE,
+  recovery_hash TEXT,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS passkeys (
+  credential_id TEXT PRIMARY KEY,
+  account_id INTEGER NOT NULL,
+  public_key TEXT NOT NULL,
+  counter INTEGER NOT NULL,
+  transports TEXT NOT NULL,
+  backed_up INTEGER NOT NULL,
+  label TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS passkeys_account ON passkeys (account_id);
+
+CREATE TABLE IF NOT EXISTS challenges (
+  challenge TEXT PRIMARY KEY,
+  flow TEXT NOT NULL,
+  account_id INTEGER,
+  payload TEXT NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS enrollments (
+  code_hash TEXT PRIMARY KEY,
+  account_id INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS login_requests (
+  code_hash TEXT PRIMARY KEY,
+  poll_hash TEXT NOT NULL UNIQUE,
+  kind TEXT NOT NULL,
+  label TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  status TEXT NOT NULL,
+  account_id INTEGER,
+  issued_token TEXT,
+  expires_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS telegram_links (
+  telegram_user_id INTEGER PRIMARY KEY,
+  account_id INTEGER NOT NULL,
+  linked_at INTEGER NOT NULL
 );

@@ -1,5 +1,5 @@
-import { homedir } from 'node:os';
-import { createApiClient } from './api/create-api-client.ts';
+import { homedir, hostname } from 'node:os';
+import { createApiClient, createDeviceClient } from './api/create-api-client.ts';
 import type { CommandContext } from './commands/command.ts';
 import { createConfigStore } from './config/create-config-store.ts';
 import { resolveConfigPath } from './config/resolve-config-path.ts';
@@ -16,12 +16,17 @@ const createIo = (): ConsoleIo =>
     ? createConsoleIo({ stdin: process.stdin, stdout: process.stdout, stderr: process.stderr })
     : createLineIo({ nextLine: createLineReader(Bun.stdin.stream()), stdout: process.stdout, stderr: process.stderr });
 
+const fetchFn = (input: string, init: RequestInit) => fetch(input, init);
+
 const context: CommandContext = {
   io: createIo(),
   config: createConfigStore(resolveConfigPath({ platform: process.platform, env: process.env, homeDir: homedir() })),
-  createClient: createApiClient((input, init) => fetch(input, init)),
+  createClient: createApiClient(fetchFn),
+  createDeviceClient: createDeviceClient(fetchFn),
   readStdin: () => Bun.stdin.text(),
   defaultServerUrl: resolveDefaultServerUrl(process.env),
+  deviceLabel: `Console on ${hostname()}`,
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 };
 
 const argv = process.argv.slice(2);

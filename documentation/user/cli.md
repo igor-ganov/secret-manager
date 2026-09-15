@@ -1,7 +1,8 @@
 # Console utility (`secret.exe`)
 
-A single Windows executable that talks to the same server and account as the bot
-and the web site.
+A single Windows executable that acts for your account on the same server as the
+web site and the bot. It never asks for a password or a token: it asks the account
+owner — you — to approve it on the web site.
 
 ## Why an interactive mode
 
@@ -24,17 +25,21 @@ secret> exit
 Values entered at the hidden prompt never appear on screen or in any history.
 Ctrl+C during a hidden prompt aborts without printing what was typed.
 
-## First run
+## First run: link the device
 
 ```text
 > secret login
-Server URL [https://…]: ⏎        ← Enter keeps the default, if one is built in
-API token: ▌                    ← hidden; create it on the web site → CLI tokens
-Logged in as Ada (12345). Config: C:\Users\you\AppData\Roaming\secret-manager\config.json
+Server URL [https://…]: ⏎        ← Enter keeps the built-in default
+Open this link, sign in with your passkey and approve this device:
+https://<server>/#link=…
+Waiting for approval…
+Logged in as Ada (…). Config: C:\Users\you\AppData\Roaming\secret-manager\config.json
 ```
 
-The token is stored in that file; `secret logout` removes it and revokes it on the
-server.
+Open the link on any device where you can sign in with your passkey (the phone is
+fine), press **Approve**, and the utility continues by itself. The token it receives
+is stored in that file; `secret logout` removes it and revokes it on the server.
+Requests expire after 10 minutes.
 
 ## Commands
 
@@ -49,8 +54,8 @@ Inside the session or as arguments (`secret <command> …`):
 | `list`                | Saved keys, one per line                                      |
 | `rm <key> [-y]`       | Delete a key; asks first unless `-y`                          |
 | `ttl [minutes]`       | Show or set link lifetime (1, 5, 15, 30, 60, 1440)            |
-| `login` / `logout`    | Store / forget the token                                      |
-| `whoami`              | Who the token belongs to                                      |
+| `login` / `logout`    | Link / unlink this device                                     |
+| `whoami`              | Which account the device acts for                             |
 | `help`, `exit`        |                                                               |
 
 When `[value]` is omitted it is asked for hidden. When it is `-` it is read from
@@ -67,14 +72,14 @@ Values with spaces inside the session go in quotes: `set note "two words"`.
 Without a terminal (input redirected) prompts are not printed and every prompt,
 hidden or not, reads the next input line — so the same commands can be scripted.
 
-Exit codes: `0` done, `1` the server rejected the request, `2` not logged in or
-token rejected, `64` usage error.
+Exit codes: `0` done, `1` the server rejected the request, `2` not linked, token
+rejected or approval expired, `64` usage error.
 
 ## Building
 
 ```sh
-bun run build:cli                                  # → dist/secret.exe
-SECRET_MANAGER_URL=https://<server> bun run build:cli   # bake in the server URL
+bun run build:cli                                        # → dist/secret.exe
+SECRET_MANAGER_URL=https://<server> bun run build:cli    # bake in the server URL
 ```
 
 `SECRET_MANAGER_URL` (environment) and `SECRET_MANAGER_CONFIG` (config file path)

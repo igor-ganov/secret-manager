@@ -38,5 +38,12 @@ export const createD1SecretStore = (database: D1Database): SecretStore => {
       .run();
   };
 
-  return { save, read, list, remove };
+  const reassign = async (fromUserId: number, toUserId: number): Promise<void> => {
+    await database
+      .prepare('UPDATE OR IGNORE secrets SET user_id = ?1 WHERE user_id = ?2')
+      .bind(toUserId, fromUserId)
+      .run();
+  };
+
+  return { save, read, list, remove, reassign };
 };

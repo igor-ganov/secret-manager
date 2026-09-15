@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { ApiClient, ApiCredentials, ApiResult } from './api/api-client.ts';
+import type { ApiClient, ApiCredentials, ApiResult, DeviceClient } from './api/api-client.ts';
 import type { CommandContext } from './commands/command.ts';
 import { NOT_LOGGED_IN } from './commands/require-client.ts';
 import { TOKEN_REJECTED } from './commands/to-outcome.ts';
@@ -9,6 +9,7 @@ import { runCommand } from './run-command.ts';
 import { runSession } from './run-session.ts';
 
 const LINK = { url: 'https://s/s/t', curl: 'curl -X POST https://s/s/t', ttlMinutes: 5 };
+const LOGIN_URL = 'https://s/#link=code';
 
 const ok = <T>(value: T): ApiResult<T> => ({ ok: true, value });
 const unauthorized: ApiResult<never> = { ok: false, error: { kind: 'unauthorized' } };
@@ -22,13 +23,20 @@ type Harness = {
   readonly configFile: { value: CliConfig };
 };
 
-const build = (answers: readonly string[], config: CliConfig = { serverUrl: 'https://s', token: 't' }, client?: Partial<ApiClient>): Harness => {
+type HarnessOptions = {
+  readonly config?: CliConfig;
+  /* How many polls answer "pending" before approval; -1 means denied. */
+  readonly pollsBeforeApproval?: number;
+};
+
+const build = (answers: readonly string[], { config = { serverUrl: 'https://s', token: 't' }, pollsBeforeApproval = 0 }: HarnessOptions = {}): Harness => {
   const queue = [...answers];
   const out: string[] = [];
   const err: string[] = [];
   const hiddenPrompts: string[] = [];
   const calls: string[] = [];
   const configFile = { value: config };
+  let polls = 0;
   const io: ConsoleIo = {
     interactive: true,
     print: (text) => out.push(text),
@@ -54,12 +62,26 @@ const build = (answers: readonly string[], config: CliConfig = { serverUrl: 'htt
     },
     settings: async () => ok({ linkTtlMinutes: 5, presets: [1, 5] }),
     saveSettings: async (minutes) => (minutes === 30 ? ok(true) : { ok: false, error: { kind: 'rejected', message: 'Bad ttl.' } }),
-    tokens: async () => ok({ tokens: [{ id: 'x', label: 'cli', createdAt: 0, current: true }] }),
+    devices: async () =>
+      ok({ passkeys: [], telegram: { linked: false }, tokens: [{ id: 'x', label: 'cli', createdAt: 0, current: true }] }),
     revokeToken: async (id) => {
       calls.push(`revoke:${id}`);
       return ok(true);
     },
-    ...client,
+  });
+  const fakeDeviceClient = (serverUrl: string): DeviceClient => ({
+    start: async (label) => {
+      calls.push(`start:${serverUrl}:${label}`);
+      return ok({ url: LOGIN_URL, pollToken: 'poll', expiresAt: Date.now() + 60_000 });
+    },
+    poll: async (pollToken) => {
+      calls.push(`poll:${pollToken}`);
+      polls += 1;
+      if (pollsBeforeApproval < 0) {
+        return { ok: false, error: { kind: 'rejected', message: 'gone' } };
+      }
+      return polls > pollsBeforeApproval ? ok({ status: 'approved', token: 'fresh-token' }) : ok({ status: 'pending' });
+    },
   });
   const context: CommandContext = {
     io,
@@ -71,8 +93,11 @@ const build = (answers: readonly string[], config: CliConfig = { serverUrl: 'htt
       },
     },
     createClient: fakeClient,
+    createDeviceClient: fakeDeviceClient,
     readStdin: async () => 'from-stdin\n',
     defaultServerUrl: 'https://default',
+    deviceLabel: 'Console on box',
+    sleep: async () => undefined,
   };
   return { context, out, err, hiddenPrompts, calls, configFile };
 };
@@ -122,13 +147,13 @@ describe('runCommand', () => {
   });
 
   test('commands needing a token fail with code 2 when not logged in (AC-2.5)', async () => {
-    const { context, err } = build([], {});
+    const { context, err } = build([], { config: {} });
     expect(await runCommand(context, ['list'])).toBe(2);
     expect(err).toEqual([NOT_LOGGED_IN]);
   });
 
   test('a rejected token fails with code 2 (AC-2.6)', async () => {
-    const { context, err } = build([], { serverUrl: 'https://s', token: 'bad' });
+    const { context, err } = build([], { config: { serverUrl: 'https://s', token: 'bad' } });
     expect(await runCommand(context, ['whoami'])).toBe(2);
     expect(err).toEqual([TOKEN_REJECTED]);
   });
@@ -139,18 +164,20 @@ describe('runCommand', () => {
     expect(await runCommand(context, [])).toBe(64);
   });
 
-  test('login asks for the url (with default) and the token hidden, then stores both (AC-2.1)', async () => {
-    const { context, out, hiddenPrompts, configFile } = build(['', 'tok'], {});
+  test('login prints the approval link, polls until approved and stores the token (device-login AC-2.1, AC-2.2)', async () => {
+    const { context, out, calls, configFile } = build([''], { config: {}, pollsBeforeApproval: 2 });
     expect(await runCommand(context, ['login'])).toBe(0);
-    expect(hiddenPrompts).toEqual(['API token: ']);
-    expect(configFile.value).toEqual({ serverUrl: 'https://default', token: 'tok' });
-    expect(out[0]).toContain('Logged in as Ada (1)');
+    expect(calls).toEqual(['start:https://default:Console on box', 'poll:poll', 'poll:poll', 'poll:poll']);
+    expect(out[1]).toBe(LOGIN_URL);
+    expect(configFile.value).toEqual({ serverUrl: 'https://default', token: 'fresh-token' });
+    expect(out.at(-1)).toContain('Logged in as Ada (1)');
   });
 
-  test('login with a bad token stores nothing', async () => {
-    const { context, configFile } = build(['https://srv', 'bad'], {});
+  test('login exits 2 when the request is denied or expires (AC-2.3)', async () => {
+    const { context, configFile, err } = build(['https://srv'], { config: {}, pollsBeforeApproval: -1 });
     expect(await runCommand(context, ['login'])).toBe(2);
     expect(configFile.value).toEqual({});
+    expect(err[0]).toContain('expired or was denied');
   });
 
   test('logout revokes the current token and drops it from the config (AC-2.3)', async () => {

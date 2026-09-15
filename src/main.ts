@@ -19,6 +19,9 @@ const bot = createBot({
   sharing: app.sharing,
   pendingSets: createPendingSetStore(),
   linkTtlMinutes: config.linkTtlMinutes,
+  telegramLinks: app.telegramLinks,
+  deviceLogin: app.deviceLogin,
+  enrollmentIssuer: app.enrollmentIssuer,
 });
 
 const shutdown = async (signal: string): Promise<void> => {

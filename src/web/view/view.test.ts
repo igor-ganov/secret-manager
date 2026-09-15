@@ -4,9 +4,11 @@ import type { Actions } from './actions.ts';
 import { formatDate } from './format-date.ts';
 import { createH } from './h.ts';
 import { renderApp } from './render-app.ts';
+import { renderDevices } from './render-devices.ts';
 import { renderKeys } from './render-keys.ts';
+import { renderLinkCard } from './render-link-card.ts';
+import { renderNotice } from './render-notice.ts';
 import { renderSettings } from './render-settings.ts';
-import { renderTokens } from './render-tokens.ts';
 import { ttlLabel } from './ttl-label.ts';
 import { initialState } from '../state/initial-state.ts';
 
@@ -21,6 +23,17 @@ const record =
     return Promise.resolve();
   };
 const actions: Actions = {
+  continueWithPasskey: record('continueWithPasskey'),
+  signUp: record('signUp'),
+  recover: record('recover'),
+  enrollHere: record('enrollHere'),
+  approveDevice: record('approveDevice'),
+  denyDevice: record('denyDevice'),
+  addPasskeyHere: record('addPasskeyHere'),
+  removePasskey: record('removePasskey'),
+  createEnrollment: record('createEnrollment'),
+  unlinkTelegram: record('unlinkTelegram'),
+  revokeToken: record('revokeToken'),
   logout: record('logout'),
   share: record('share'),
   linkFor: record('linkFor'),
@@ -30,12 +43,11 @@ const actions: Actions = {
   saveValue: record('saveValue'),
   confirmDelete: record('confirmDelete'),
   setTtl: record('setTtl'),
-  createToken: record('createToken'),
-  revokeToken: record('revokeToken'),
   copy: record('copy'),
 };
 
 const container = (nodes: readonly Node[]) => h('div', {}, ...nodes);
+const signedIn = { ...initialState, session: { kind: 'signed-in' as const, user: { id: 1, name: 'Ada' } } };
 
 describe('pure view helpers', () => {
   test('ttlLabel names a day and otherwise minutes', () => {
@@ -77,31 +89,54 @@ describe('renderSettings', () => {
   });
 });
 
-describe('renderTokens', () => {
-  test('marks the current session and offers revoke for the rest (AC-5.1)', () => {
-    const section = renderTokens(h, actions, [
-      { id: '1', label: 'web', createdAt: 0, current: true },
-      { id: '2', label: 'laptop', createdAt: 0, current: false },
-    ]);
-    expect(section.textContent).toContain('current session');
-    expect(section.querySelectorAll('button[aria-label^="Revoke"]')).toHaveLength(1);
+describe('renderDevices (device-login AC-4.1)', () => {
+  test('lists passkeys (no Remove on the last one), Telegram state and sessions', () => {
+    const one = renderDevices(h, actions, { passkeys: [{ id: 'p1', label: 'Laptop', createdAt: 0, backedUp: true }], telegram: { linked: true }, tokens: [{ id: 't', label: 'web', createdAt: 0, current: true }] }, 'Chrome');
+    expect(one.querySelectorAll('button[aria-label^="Remove passkey"]')).toHaveLength(0);
+    expect(one.textContent).toContain('synced');
+    expect(one.textContent).toContain('Unlink Telegram');
+    expect(one.textContent).toContain('this browser session');
+    const two = renderDevices(h, actions, { passkeys: [{ id: 'p1', label: 'Laptop', createdAt: 0, backedUp: false }, { id: 'p2', label: 'Phone', createdAt: 0, backedUp: false }], telegram: { linked: false }, tokens: [] }, 'Chrome');
+    expect(two.querySelectorAll('button[aria-label^="Remove passkey"]')).toHaveLength(2);
+    expect(two.textContent).toContain('not linked');
+    two.querySelector<HTMLButtonElement>('[aria-label="Remove passkey Phone"]')?.click();
+    expect(calls.splice(0)).toEqual(['removePasskey:p2']);
+  });
+});
+
+describe('renderLinkCard and renderNotice', () => {
+  test('shows the asking device with Approve/Deny only on the link route', () => {
+    const card = container(renderLinkCard(h, actions, { kind: 'link', code: 'c' }, { kind: 'cli', label: 'laptop' }));
+    expect(card.textContent).toContain('The console utility “laptop” asks to use your account.');
+    card.querySelector<HTMLButtonElement>('button')?.click();
+    expect(calls.splice(0)).toEqual(['approveDevice:c']);
+    expect(container(renderLinkCard(h, actions, { kind: 'link', code: 'c' }, undefined)).textContent).toContain('expired');
+    expect(renderLinkCard(h, actions, { kind: 'home' }, undefined)).toHaveLength(0);
+  });
+
+  test('renders recovery codes and enrollment links with a QR image', () => {
+    expect(renderNotice(h, actions, { kind: 'recovery', code: 'abcd-efgh' }).textContent).toContain('abcd-efgh');
+    const enrollment = renderNotice(h, actions, { kind: 'enrollment', enrollment: { url: 'https://x/#enroll=c', qr: 'data:image/svg+xml;base64,AA==', expiresAt: 0 } });
+    expect(enrollment.querySelector('img')?.getAttribute('src')).toBe('data:image/svg+xml;base64,AA==');
+    expect(enrollment.textContent).toContain('https://x/#enroll=c');
   });
 });
 
 describe('renderApp', () => {
-  test('renders the login link while anonymous and the workspace when signed in', () => {
-    const anonymous = container(renderApp(h, actions, { ...initialState, session: { kind: 'anonymous', botId: 3 } }, 'https://x.test'));
-    expect(anonymous.querySelector('a')?.getAttribute('href')).toContain('bot_id=3');
-    const signedIn = container(
-      renderApp(
-        h,
-        actions,
-        { ...initialState, session: { kind: 'signed-in', botId: 3, user: { id: 1, name: 'Ada' } }, error: 'boom' },
-        'https://x.test',
-      ),
-    );
-    expect(signedIn.textContent).toContain('Ada');
-    expect(signedIn.querySelector('[role="alert"]')?.textContent).toBe('boom');
-    expect(signedIn.querySelector('[role="status"]')).not.toBeUndefined();
+  test('renders the login card while anonymous, the enroll page on that route, and the workspace when signed in', () => {
+    const anonymous = container(renderApp(h, actions, { ...initialState, session: { kind: 'anonymous' } }));
+    expect(anonymous.textContent).toContain('Continue with passkey');
+    expect(anonymous.textContent).not.toContain('Create a new account');
+    expect(anonymous.textContent).toContain('Lost every device?');
+    const afterPrompt = container(renderApp(h, actions, { ...initialState, session: { kind: 'anonymous' }, loginAttempted: true }));
+    /* The recovery submit is a form submission (not exercised by click here). */
+    afterPrompt.querySelectorAll<HTMLButtonElement>('button[type="button"]').forEach((button) => button.click());
+    expect(calls.splice(0)).toEqual(['continueWithPasskey:', 'signUp:']);
+    const enroll = container(renderApp(h, actions, { ...initialState, session: { kind: 'anonymous' }, route: { kind: 'enroll', code: 'c' }, enrollmentInfo: { accountName: 'Ada' } }));
+    expect(enroll.textContent).toContain('account “Ada”');
+    const workspace = container(renderApp(h, actions, { ...signedIn, error: 'boom' }));
+    expect(workspace.textContent).toContain('Ada');
+    expect(workspace.textContent).toContain('Devices');
+    expect(workspace.querySelector('[role="alert"]')?.textContent).toBe('boom');
   });
 });

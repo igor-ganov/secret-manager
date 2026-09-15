@@ -2,10 +2,14 @@ import type { AppState } from './app-state.ts';
 
 export const initialState: AppState = {
   session: { kind: 'loading' },
+  route: { kind: 'home' },
+  loginAttempted: false,
   keys: [],
   rowModes: {},
   settings: { linkTtlMinutes: 5, presets: [] },
-  tokens: [],
+  devices: { passkeys: [], telegram: { linked: false }, tokens: [] },
+  enrollmentInfo: undefined,
+  linkInfo: undefined,
   notice: { kind: 'idle' },
   error: undefined,
   toast: '',

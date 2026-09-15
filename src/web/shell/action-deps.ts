@@ -6,4 +6,8 @@ export type ActionDeps = {
   readonly api: ApiClient;
   readonly store: Store<AppState>;
   readonly clipboard: (text: string) => Promise<void>;
+  /* Drops the fragment once a link/enroll code has been used. */
+  readonly clearHash: () => void;
+  /* Default label for passkeys created in this browser. */
+  readonly deviceName: string;
 };

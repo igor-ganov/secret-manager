@@ -28,6 +28,9 @@ export const createSecretStore = (databasePath: string): SecretStore => {
   const removeStatement = database.query<undefined, [number, string]>(
     'DELETE FROM secrets WHERE user_id = ?1 AND key = ?2',
   );
+  const reassignStatement = database.query<undefined, [number, number]>(
+    'UPDATE OR IGNORE secrets SET user_id = ?1 WHERE user_id = ?2',
+  );
 
   const save = async (userId: number, key: string, value: string): Promise<void> => {
     saveStatement.run(userId, key, value);
@@ -43,5 +46,9 @@ export const createSecretStore = (databasePath: string): SecretStore => {
     removeStatement.run(userId, key);
   };
 
-  return { save, read, list, remove };
+  const reassign = async (fromUserId: number, toUserId: number): Promise<void> => {
+    reassignStatement.run(toUserId, fromUserId);
+  };
+
+  return { save, read, list, remove, reassign };
 };

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { createApiClient, type FetchFn } from './create-api-client.ts';
+import { createApiClient, createDeviceClient, type FetchFn } from './create-api-client.ts';
 
 const CREDENTIALS = { serverUrl: 'https://s.test/', token: 'tok' };
 
@@ -40,5 +40,22 @@ describe('cli createApiClient', () => {
   test('reads a stored value (AC-3.4)', async () => {
     const client = createApiClient(respond(200, '{"value":"v"}'))(CREDENTIALS);
     expect(await client.read('k')).toEqual({ ok: true, value: { value: 'v' } });
+  });
+});
+
+describe('cli createDeviceClient (device-login AC-2.x)', () => {
+  test('starts a request without credentials and polls with the poll token', async () => {
+    const seen: { url?: string; init?: RequestInit } = {};
+    const device = createDeviceClient(respond(201, '{"url":"u","pollToken":"p","expiresAt":1}', seen))('https://s.test');
+    expect(await device.start('laptop')).toEqual({ ok: true, value: { url: 'u', pollToken: 'p', expiresAt: 1 } });
+    expect(new Headers(seen.init?.headers).has('authorization')).toBe(false);
+
+    const poller = createDeviceClient(respond(200, '{"status":"approved","token":"t"}', seen))('https://s.test');
+    expect(await poller.poll('p')).toEqual({ ok: true, value: { status: 'approved', token: 't' } });
+    expect(new Headers(seen.init?.headers).get('x-poll-token')).toBe('p');
+    expect(await createDeviceClient(respond(410, '{"error":"gone"}'))('https://s.test').poll('p')).toEqual({
+      ok: false,
+      error: { kind: 'rejected', message: 'gone' },
+    });
   });
 });

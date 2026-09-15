@@ -1,15 +1,20 @@
 # Web site
 
-The site does everything the Telegram bot does, from a browser, on the same
-account. It is served from the same address as the one-time links (the Worker's
-root URL).
+The site is where your account lives. You sign in with a **passkey** (Face ID,
+Windows Hello, a fingerprint, a security key — whatever your device offers). The
+Telegram bot and the console utility are **devices** that you approve from here;
+they never see a password or a key.
 
-## Log in
+## Continue with passkey
 
-1. Open the site and press **Log in with Telegram**.
-2. Telegram asks you to confirm; you come back signed in as the same user the bot
-   knows, so your saved keys are already there.
-3. **Log out** ends the browser session; the bot and other devices are unaffected.
+There is one button. Press **Continue with passkey**:
+
+- If this device already holds a passkey for the site, you are signed in.
+- If not, the page offers **Create a new account on this device**. Confirm the
+  passkey your device proposes; the page then shows a **recovery code** once. Copy
+  it somewhere safe: it is the only way back in if you lose every device.
+
+Nothing to type, no password, no e-mail.
 
 ## Share a secret
 
@@ -24,8 +29,6 @@ the recipient sees a confirmation page and presses *Reveal secret*; scripts run 
 
 ## Saved keys
 
-Every key has three controls:
-
 | Control | What it does                                                    |
 | ------- | --------------------------------------------------------------- |
 | Link    | Creates a fresh one-time link to the stored value               |
@@ -35,18 +38,36 @@ Every key has three controls:
 ## Settings
 
 Pick how long new links stay valid: 1, 5, 15, 30, 60 minutes or 1 day. The choice
-is saved immediately and applies to links made from the site, the bot and the CLI.
+applies to links made from the site, the bot and the console utility.
 
-## CLI tokens
+## Devices
 
-The console utility needs a token to act on your behalf:
+- **Passkeys** — every passkey that can open the account, with the date it was
+  added. Remove any except the last one.
+- **Add a passkey here** — for a browser you signed into with another device's key
+  (for example your phone through the QR prompt) and want to keep.
+- **Add a device** — shows a one-time link and a QR code (valid 10 minutes). Open
+  the link or scan the code on the other phone or computer and press *Add passkey
+  on this device*; that device is then signed in with its own passkey.
+- **Telegram** — whether the bot chat is linked. To link it, send the bot anything:
+  it replies with a link; open it here and press **Approve**. *Unlink Telegram*
+  cuts the chat off; `/logout` in the bot does the same.
+- **Sessions and console logins** — browser sessions and console utilities that
+  hold a token. **Revoke** any you no longer use.
 
-1. Type a label (for example `laptop`) and press **New token**.
-2. Copy the token — it is shown once.
-3. Run `secret login` on the machine and paste it when asked.
+## Approving a device
 
-Revoke a token here whenever a device is lost or no longer used; the current web
-session is listed too but is ended with *Log out*.
+When the bot or the console utility asks for access, it gives you a link. Opening it
+here shows *what* is asking (for example "The console utility “Console on
+LAPTOP” asks to use your account") with **Approve** and **Deny**. If you are not
+signed in yet, sign in first; the request is still there afterwards.
+
+## Lost every device?
+
+On the sign-in page, enter your recovery code under *Lost every device?* and create
+a passkey on the current device. The old code stops working and a new one is shown
+once. If you still have the Telegram bot linked, `/device` in the bot gives you an
+enrollment link instead, without spending the code.
 
 ## Keyboard and screen readers
 

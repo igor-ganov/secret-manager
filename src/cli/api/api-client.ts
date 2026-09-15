@@ -1,9 +1,11 @@
 import type {
+  DevicePollResponse,
+  DeviceStartResponse,
+  DevicesResponse,
   IssuedLinkResponse,
   KeysResponse,
   MeResponse,
   SettingsResponse,
-  TokensResponse,
   ValueResponse,
 } from '../../features/http-api/api-types.ts';
 import type { Result } from '../../features/result/result.ts';
@@ -29,6 +31,12 @@ export type ApiClient = {
   readonly remove: (key: string) => Promise<ApiResult<true>>;
   readonly settings: () => Promise<ApiResult<SettingsResponse>>;
   readonly saveSettings: (linkTtlMinutes: number) => Promise<ApiResult<true>>;
-  readonly tokens: () => Promise<ApiResult<TokensResponse>>;
+  readonly devices: () => Promise<ApiResult<DevicesResponse>>;
   readonly revokeToken: (id: string) => Promise<ApiResult<true>>;
+};
+
+/* The unauthenticated half of the device-login flow (device-login US-2). */
+export type DeviceClient = {
+  readonly start: (label: string) => Promise<ApiResult<DeviceStartResponse>>;
+  readonly poll: (pollToken: string) => Promise<ApiResult<DevicePollResponse>>;
 };

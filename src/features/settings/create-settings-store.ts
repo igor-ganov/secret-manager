@@ -20,6 +20,10 @@ export const createSettingsStore = (databasePath: string): SettingsStore => {
      ON CONFLICT (user_id) DO UPDATE SET link_ttl_minutes = excluded.link_ttl_minutes`,
   );
 
+  const reassignStatement = database.query<undefined, [number, number]>(
+    'UPDATE OR IGNORE user_settings SET user_id = ?1 WHERE user_id = ?2',
+  );
+
   const getTtlMinutes = async (userId: number): Promise<number | undefined> =>
     readStatement.get(userId)?.link_ttl_minutes;
 
@@ -27,5 +31,9 @@ export const createSettingsStore = (databasePath: string): SettingsStore => {
     saveStatement.run(userId, minutes);
   };
 
-  return { getTtlMinutes, setTtlMinutes };
+  const reassign = async (fromUserId: number, toUserId: number): Promise<void> => {
+    reassignStatement.run(toUserId, fromUserId);
+  };
+
+  return { getTtlMinutes, setTtlMinutes, reassign };
 };
