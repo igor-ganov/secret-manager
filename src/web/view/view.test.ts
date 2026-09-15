@@ -23,7 +23,7 @@ const record =
     return Promise.resolve();
   };
 const actions: Actions = {
-  logIn: record('logIn'),
+  continueWithPasskey: record('continueWithPasskey'),
   signUp: record('signUp'),
   recover: record('recover'),
   enrollHere: record('enrollHere'),
@@ -125,8 +125,13 @@ describe('renderLinkCard and renderNotice', () => {
 describe('renderApp', () => {
   test('renders the login card while anonymous, the enroll page on that route, and the workspace when signed in', () => {
     const anonymous = container(renderApp(h, actions, { ...initialState, session: { kind: 'anonymous' } }));
-    expect(anonymous.textContent).toContain('Log in with passkey');
-    expect(anonymous.textContent).toContain('Create account');
+    expect(anonymous.textContent).toContain('Continue with passkey');
+    expect(anonymous.textContent).not.toContain('Create a new account');
+    expect(anonymous.textContent).toContain('Lost every device?');
+    const afterPrompt = container(renderApp(h, actions, { ...initialState, session: { kind: 'anonymous' }, loginAttempted: true }));
+    /* The recovery submit is a form submission (not exercised by click here). */
+    afterPrompt.querySelectorAll<HTMLButtonElement>('button[type="button"]').forEach((button) => button.click());
+    expect(calls.splice(0)).toEqual(['continueWithPasskey:', 'signUp:']);
     const enroll = container(renderApp(h, actions, { ...initialState, session: { kind: 'anonymous' }, route: { kind: 'enroll', code: 'c' }, enrollmentInfo: { accountName: 'Ada' } }));
     expect(enroll.textContent).toContain('account “Ada”');
     const workspace = container(renderApp(h, actions, { ...signedIn, error: 'boom' }));

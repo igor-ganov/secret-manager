@@ -2,6 +2,7 @@ import type { ActionDeps } from './action-deps.ts';
 import { addPasskeyHere } from './actions/add-passkey-here.ts';
 import { approveDevice } from './actions/approve-device.ts';
 import { confirmDelete } from './actions/confirm-delete.ts';
+import { continueWithPasskey } from './actions/continue-with-passkey.ts';
 import { copy } from './actions/copy.ts';
 import { createEnrollment } from './actions/create-enrollment.ts';
 import { denyDevice } from './actions/deny-device.ts';
@@ -9,7 +10,6 @@ import { enrollHere } from './actions/enroll-here.ts';
 import { init } from './actions/init.ts';
 import { linkFor } from './actions/link-for.ts';
 import { loadRoute } from './actions/load-route.ts';
-import { logIn } from './actions/log-in.ts';
 import { logout } from './actions/logout.ts';
 import { recover } from './actions/recover.ts';
 import { removePasskey } from './actions/remove-passkey.ts';
@@ -25,7 +25,7 @@ import type { ShellActions } from './shell-actions.ts';
 export const createActions = (deps: ActionDeps): ShellActions => ({
   init: init(deps),
   loadRoute: loadRoute(deps),
-  logIn: logIn(deps),
+  continueWithPasskey: continueWithPasskey(deps),
   signUp: signUp(deps),
   recover: recover(deps),
   enrollHere: enrollHere(deps),

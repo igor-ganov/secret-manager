@@ -4,17 +4,18 @@ import { runCeremony } from '../../auth/run-ceremony.ts';
 import type { ActionDeps } from '../action-deps.ts';
 import { finishSignIn } from './finish-sign-in.ts';
 
-export const signUp =
-  (deps: ActionDeps) =>
-  async (name: string): Promise<void> => {
-    const { api, store, deviceName } = deps;
-    await matchResult(
-      await runCeremony(
-        () => api.registerOptions(name),
-        createCredential,
-        (response) => api.registerVerify(response, deviceName),
-      ),
-      finishSignIn(deps),
-      async (error) => store.patch({ error }),
-    );
-  };
+const DEFAULT_NAME = 'My account';
+
+/* Reached only from the "no passkey used" fallback of continueWithPasskey. */
+export const signUp = (deps: ActionDeps) => async (): Promise<void> => {
+  const { api, store, deviceName } = deps;
+  await matchResult(
+    await runCeremony(
+      () => api.registerOptions(DEFAULT_NAME),
+      createCredential,
+      (response) => api.registerVerify(response, deviceName),
+    ),
+    finishSignIn(deps),
+    async (error) => store.patch({ error }),
+  );
+};

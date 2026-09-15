@@ -18,7 +18,7 @@ const bySession = ({ h, actions, deviceName }: ViewContext, state: AppState): re
     case 'loading':
       return [h('h1', {}, 'Secret manager'), ...renderError(h, state.error), h('p', { attrs: { class: 'muted' } }, 'Loading…')];
     case 'anonymous':
-      return [...renderLoginCard(h, actions, state.route), ...renderError(h, state.error)];
+      return [...renderLoginCard(h, actions, state.route, state.loginAttempted), ...renderError(h, state.error)];
     case 'signed-in':
       return renderWorkspace(h, actions, state, session.user, deviceName);
   }

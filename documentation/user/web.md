@@ -5,16 +5,16 @@ Windows Hello, a fingerprint, a security key — whatever your device offers). T
 Telegram bot and the console utility are **devices** that you approve from here;
 they never see a password or a key.
 
-## Create an account
+## Continue with passkey
 
-1. Open the site, type an account name and press **Create account**.
-2. Your browser asks you to create a passkey; confirm it.
-3. The page shows a **recovery code** once. Copy it somewhere safe: it is the only
-   way back in if you lose every device.
+There is one button. Press **Continue with passkey**:
 
-## Sign in
+- If this device already holds a passkey for the site, you are signed in.
+- If not, the page offers **Create a new account on this device**. Confirm the
+  passkey your device proposes; the page then shows a **recovery code** once. Copy
+  it somewhere safe: it is the only way back in if you lose every device.
 
-Press **Log in with passkey** and confirm with your device. Nothing to type.
+Nothing to type, no password, no e-mail.
 
 ## Share a secret
 

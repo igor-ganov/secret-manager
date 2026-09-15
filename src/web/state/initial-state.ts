@@ -3,6 +3,7 @@ import type { AppState } from './app-state.ts';
 export const initialState: AppState = {
   session: { kind: 'loading' },
   route: { kind: 'home' },
+  loginAttempted: false,
   keys: [],
   rowModes: {},
   settings: { linkTtlMinutes: 5, presets: [] },

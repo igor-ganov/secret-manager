@@ -23,7 +23,7 @@ User guides: [web](documentation/user/web.md) · [CLI](documentation/user/cli.md
 
 ## How to use
 
-1. Open the site, press **Create account** and confirm the passkey your device offers. Save the recovery code it shows.
+1. Open the site, press **Continue with passkey** and, on a device without one yet, confirm **Create a new account on this device**. Save the recovery code it shows.
 2. Open [@secret_manager_bot](https://t.me/secret_manager_bot), press **Start**, open the link the bot replies with and press **Approve** on the site.
 3. Send the bot a value (or `key value` to also save it) — it replies with a one-time link and a ready-to-copy `curl` snippet.
 4. Share the link. Opening it shows a confirmation page; the secret is revealed only after pressing **Reveal secret** (a `POST` to the same url), so link-preview crawlers cannot burn it. Scripts can skip the page entirely: `curl -X POST <link>`.

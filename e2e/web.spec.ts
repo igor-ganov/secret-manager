@@ -2,9 +2,9 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
 /* Locator contract with src/web (labels and headings are the UI's public API). */
 const UI = {
-  login: 'Log in with passkey',
-  accountName: 'Account name',
-  createAccount: 'Create account',
+  continue: 'Continue with passkey',
+  createAccount: 'Create a new account on this device',
+  recoveryHeading: 'Lost every device?',
   recoveryCode: 'Recovery code',
   recover: 'Recover with code',
   logout: 'Log out',
@@ -42,14 +42,19 @@ const addAuthenticator = async (page: Page): Promise<Authenticator> => {
   };
 };
 
-const signUp = async (page: Page, name: string): Promise<{ code: string; authenticator: Authenticator }> => {
+/* Accounts are named "My account"; every test signs up a fresh one. */
+const NAME = 'My account';
+
+/* The single entry point: with no passkey on this authenticator the prompt
+   ends without a login and the card offers to create an account. */
+const signUp = async (page: Page): Promise<{ code: string; authenticator: Authenticator }> => {
   const authenticator = await addAuthenticator(page);
   await page.goto('/');
-  await page.getByLabel(UI.accountName).fill(name);
+  await page.getByRole('button', { name: UI.continue }).click();
   await page.getByRole('button', { name: UI.createAccount }).click();
   await expect(page.getByRole('status')).toContainText('Your recovery code');
   const code = (await page.getByRole('status').locator('pre').textContent()) ?? '';
-  await expect(page.getByText(name, { exact: true })).toBeVisible();
+  await expect(page.getByText(NAME, { exact: true })).toBeVisible();
   return { code, authenticator };
 };
 
@@ -61,37 +66,39 @@ const shareValue = async (page: Page, key: string, value: string): Promise<void>
 
 test.describe('accounts (passkey-accounts)', () => {
   test('signup shows a recovery code once; logout and passkey login work (AC-1.1, AC-1.2, AC-2.1)', async ({ page }) => {
-    const { code } = await signUp(page, 'Ada');
+    const { code } = await signUp(page);
     expect(code).toMatch(/^([a-z0-9]{4}-){6}[a-z0-9]{4}$/);
     await page.getByRole('button', { name: UI.logout }).click();
-    await expect(page.getByRole('button', { name: UI.login })).toBeVisible();
-    await page.getByRole('button', { name: UI.login }).click();
-    await expect(page.getByText('Ada', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: UI.continue })).toBeVisible();
+    await page.getByRole('button', { name: UI.continue }).click();
+    await expect(page.getByText(NAME, { exact: true })).toBeVisible();
     /* The live region is hidden while empty, so the code is gone for good. */
     await expect(page.locator('[role="status"]')).not.toContainText('recovery code');
   });
 
-  test('a signed-out visitor sees only the sign-in choices (AC-2.1)', async ({ page }) => {
+  test('a signed-out visitor sees one entry point; account creation appears only after a prompt (AC-2.1)', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('button', { name: UI.login })).toBeVisible();
+    await expect(page.getByRole('button', { name: UI.continue })).toBeVisible();
+    await expect(page.getByRole('button', { name: UI.createAccount })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: UI.keys.heading })).toHaveCount(0);
   });
 
   test('recovery with the shown code enrols a new passkey and rotates the code (AC-4.1)', async ({ page }) => {
-    const { code, authenticator } = await signUp(page, 'Grace');
+    const { code, authenticator } = await signUp(page);
     await page.getByRole('button', { name: UI.logout }).click();
     /* Every device is lost: the old key is gone, a new one will be created. */
     await authenticator.replace();
+    await page.getByText(UI.recoveryHeading).click();
     await page.getByLabel(UI.recoveryCode).fill(code.toUpperCase());
     await page.getByRole('button', { name: UI.recover }).click();
-    await expect(page.getByText('Grace', { exact: true })).toBeVisible();
+    await expect(page.getByText(NAME, { exact: true })).toBeVisible();
     const fresh = (await page.getByRole('status').locator('pre').textContent()) ?? '';
     expect(fresh).not.toBe(code);
     await expect(page.getByRole('list').filter({ hasText: 'Recovered device' })).toBeVisible();
   });
 
   test('adds a passkey here and can remove all but the last (AC-3.4)', async ({ page }) => {
-    const { authenticator } = await signUp(page, 'Linus');
+    const { authenticator } = await signUp(page);
     /* A second authenticator: the first one already holds a key for this
        account and correctly refuses a duplicate (excludeCredentials). */
     await authenticator.replace();
@@ -103,7 +110,7 @@ test.describe('accounts (passkey-accounts)', () => {
   });
 
   test('another device joins through the one-time link with a QR code (AC-3.1–3.3)', async ({ page, browser }) => {
-    await signUp(page, 'Margaret');
+    await signUp(page);
     await page.getByRole('button', { name: UI.devices.addDevice }).click();
     const status = page.getByRole('status');
     await expect(status.getByRole('img', { name: 'QR code of the enrollment link' })).toBeVisible();
@@ -114,10 +121,10 @@ test.describe('accounts (passkey-accounts)', () => {
     const phone = await other.newPage();
     await addAuthenticator(phone);
     await phone.goto(url);
-    await expect(phone.getByText('account “Margaret”')).toBeVisible();
+    await expect(phone.getByText(`account “${NAME}”`)).toBeVisible();
     await phone.getByLabel('Device name').fill('Phone');
     await phone.getByRole('button', { name: UI.devices.enrollHere }).click();
-    await expect(phone.getByText('Margaret', { exact: true })).toBeVisible();
+    await expect(phone.getByText(NAME, { exact: true })).toBeVisible();
     await expect(phone.getByRole('status')).toContainText('This device now has a passkey');
     await expect(phone.getByRole('button', { name: 'Remove passkey Phone' })).toBeVisible();
 
@@ -136,7 +143,7 @@ test.describe('device login (device-login)', () => {
     const poll = () => request.get('/api/device/poll', { headers: { 'x-poll-token': pollToken } });
     expect(await (await poll()).json()).toEqual({ status: 'pending' });
 
-    await signUp(page, 'Ada');
+    await signUp(page);
     await page.goto(url);
     await expect(page.getByText('The console utility “laptop” asks to use your account.')).toBeVisible();
     await page.getByRole('button', { name: 'Approve' }).click();
@@ -146,20 +153,20 @@ test.describe('device login (device-login)', () => {
     const approved = await (await poll()).json();
     expect(approved.status).toBe('approved');
     const me = await request.get('/api/me', { headers: { authorization: `Bearer ${approved.token}` } });
-    expect((await me.json()).name).toBe('Ada');
+    expect((await me.json()).name).toBe(NAME);
     await expect(page.getByRole('button', { name: 'Revoke laptop' })).toBeVisible();
   });
 
   test('a signed-out visitor is told to sign in first (AC-3.1)', async ({ page, request }) => {
     const { url } = await (await request.post('/api/device/start', { data: { label: 'laptop' } })).json();
     await page.goto(url);
-    await expect(page.getByText('A device is asking for access. Sign in to review and approve it.')).toBeVisible();
+    await expect(page.getByText('A device is asking for access. Continue to review and approve it.')).toBeVisible();
   });
 });
 
 test.describe('workspace (web-app)', () => {
   test('shares an unsaved value (AC-2.2, AC-2.5)', async ({ page }) => {
-    await signUp(page, 'Ada');
+    await signUp(page);
     await shareValue(page, '', 'ephemeral-secret');
     const result = page.getByRole('status');
     await expect(result).toContainText('/s/');
@@ -170,7 +177,7 @@ test.describe('workspace (web-app)', () => {
   });
 
   test('saves a pair, then links, sets and deletes it (AC-2.3, AC-3.x)', async ({ page }) => {
-    await signUp(page, 'Ada');
+    await signUp(page);
     await shareValue(page, 'db-password', 'hunter2');
     const row = page.getByRole('listitem').filter({ hasText: 'db-password' });
     await expect(row).toBeVisible();
@@ -186,7 +193,7 @@ test.describe('workspace (web-app)', () => {
   });
 
   test('rejects an invalid key and changes the link lifetime (AC-2.4, AC-4.1)', async ({ page }) => {
-    await signUp(page, 'Ada');
+    await signUp(page);
     await shareValue(page, 'a'.repeat(63), 'v');
     await expect(page.getByRole('alert')).toContainText('Key must be');
     const group = page.getByRole('radiogroup', { name: UI.settings.group });
@@ -197,7 +204,7 @@ test.describe('workspace (web-app)', () => {
   });
 
   test('is operable with the keyboard alone (AC-6.1)', async ({ page }) => {
-    await signUp(page, 'Ada');
+    await signUp(page);
     await page.getByLabel(UI.share.value, { exact: true }).focus();
     await page.keyboard.type('typed-secret');
     await page.keyboard.press('Tab');
