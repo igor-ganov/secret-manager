@@ -18,7 +18,6 @@ import { saveValue } from './actions/save-value.ts';
 import { setRowMode } from './actions/set-row-mode.ts';
 import { setTtl } from './actions/set-ttl.ts';
 import { share } from './actions/share.ts';
-import { signUp } from './actions/sign-up.ts';
 import { unlinkTelegram } from './actions/unlink-telegram.ts';
 import type { ShellActions } from './shell-actions.ts';
 
@@ -26,7 +25,6 @@ export const createActions = (deps: ActionDeps): ShellActions => ({
   init: init(deps),
   loadRoute: loadRoute(deps),
   continueWithPasskey: continueWithPasskey(deps),
-  signUp: signUp(deps),
   recover: recover(deps),
   enrollHere: enrollHere(deps),
   approveDevice: approveDevice(deps),

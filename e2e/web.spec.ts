@@ -3,7 +3,6 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 /* Locator contract with src/web (labels and headings are the UI's public API). */
 const UI = {
   continue: 'Continue with passkey',
-  createAccount: 'Create a new account on this device',
   recoveryHeading: 'Lost every device?',
   recoveryCode: 'Recovery code',
   recover: 'Recover with code',
@@ -45,13 +44,12 @@ const addAuthenticator = async (page: Page): Promise<Authenticator> => {
 /* Accounts are named "My account"; every test signs up a fresh one. */
 const NAME = 'My account';
 
-/* The single entry point: with no passkey on this authenticator the prompt
-   ends without a login and the card offers to create an account. */
+/* The single entry point: with no passkey on this authenticator the login
+   prompt ends without a credential and the account is created right away. */
 const signUp = async (page: Page): Promise<{ code: string; authenticator: Authenticator }> => {
   const authenticator = await addAuthenticator(page);
   await page.goto('/');
   await page.getByRole('button', { name: UI.continue }).click();
-  await page.getByRole('button', { name: UI.createAccount }).click();
   await expect(page.getByRole('status')).toContainText('Your recovery code');
   const code = (await page.getByRole('status').locator('pre').textContent()) ?? '';
   await expect(page.getByText(NAME, { exact: true })).toBeVisible();
@@ -76,10 +74,11 @@ test.describe('accounts (passkey-accounts)', () => {
     await expect(page.locator('[role="status"]')).not.toContainText('recovery code');
   });
 
-  test('a signed-out visitor sees one entry point; account creation appears only after a prompt (AC-2.1)', async ({ page }) => {
+  test('a signed-out visitor sees one entry point (AC-2.1)', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('button', { name: UI.continue })).toBeVisible();
-    await expect(page.getByRole('button', { name: UI.createAccount })).toHaveCount(0);
+    /* The recovery form is collapsed, so exactly one button is offered. */
+    await expect(page.getByRole('button')).toHaveCount(1);
     await expect(page.getByRole('heading', { name: UI.keys.heading })).toHaveCount(0);
   });
 

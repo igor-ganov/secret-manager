@@ -10,9 +10,9 @@ they never see a password or a key.
 There is one button. Press **Continue with passkey**:
 
 - If this device already holds a passkey for the site, you are signed in.
-- If not, the page offers **Create a new account on this device**. Confirm the
-  passkey your device proposes; the page then shows a **recovery code** once. Copy
-  it somewhere safe: it is the only way back in if you lose every device.
+- If not, your device asks you to create a passkey; confirming it creates the
+  account in the same step. The page then shows a **recovery code** once. Copy it
+  somewhere safe: it is the only way back in if you lose every device.
 
 Nothing to type, no password, no e-mail.
 

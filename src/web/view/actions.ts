@@ -3,7 +3,6 @@ import type { RowMode } from '../state/app-state.ts';
 /* Everything a view may ask the shell to do. */
 export type Actions = {
   readonly continueWithPasskey: () => Promise<void>;
-  readonly signUp: () => Promise<void>;
   readonly recover: (code: string) => Promise<void>;
   readonly enrollHere: (code: string, label: string) => Promise<void>;
   readonly approveDevice: (code: string) => Promise<void>;

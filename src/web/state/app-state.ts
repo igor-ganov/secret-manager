@@ -33,8 +33,6 @@ export type Notice =
 export type AppState = {
   readonly session: Session;
   readonly route: Route;
-  /* A passkey prompt ended without a login: offer to create an account. */
-  readonly loginAttempted: boolean;
   readonly keys: readonly string[];
   readonly rowModes: Readonly<Record<string, RowMode>>;
   readonly settings: SettingsResponse;
