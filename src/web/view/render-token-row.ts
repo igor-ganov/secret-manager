@@ -6,7 +6,7 @@ import type { H } from './h.ts';
 type Trailing = (h: H, actions: Actions, token: TokenResponse) => HTMLElement;
 
 const TRAILING: Readonly<Record<`${boolean}`, Trailing>> = {
-  true: (h) => h('span', { attrs: { class: 'muted' } }, 'current session'),
+  true: (h) => h('span', { attrs: { class: 'muted' } }, 'this browser session'),
   false: (h, actions, token) =>
     h(
       'button',

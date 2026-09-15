@@ -1,7 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = 3999;
-const BASE_URL = `http://127.0.0.1:${PORT}`;
+/* `localhost` is a valid WebAuthn relying-party id; bare IPs are not. */
+const BASE_URL = `http://localhost:${PORT}`;
 /* Event-driven waits everywhere; this ceiling only bounds a genuinely stuck
    step and can be raised on slow machines. */
 const WAIT_CEILING_MS = Number(process.env['E2E_WAIT_CEILING_MS'] ?? '10000');
@@ -23,8 +24,8 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
     command: 'bun run src/dev-web.ts',
-    url: `${BASE_URL}/api/auth/config`,
+    url: `${BASE_URL}/api/me`,
     reuseExistingServer: false,
-    env: { PORT: String(PORT), DATABASE_PATH: ':memory:', BASE_URL, DEV_LOGIN_USER_ID: '1' },
+    env: { PORT: String(PORT), DATABASE_PATH: ':memory:', BASE_URL },
   },
 });

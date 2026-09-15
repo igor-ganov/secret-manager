@@ -17,3 +17,6 @@ database_id = "0c37c6cd-de14-4af4-94b6-63aacdc4d2d9"
 
 [vars]
 LINK_TTL_MINUTES = "5"
+# Public origin: passkey relying party and base of every link the worker
+# hands out. Change it together with a custom domain.
+ORIGIN = "https://secret-manager.igor-ganov.workers.dev"

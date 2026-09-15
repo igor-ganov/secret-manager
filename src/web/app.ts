@@ -6,4 +6,5 @@ void startApp({
   clipboard: (text) => globalThis.navigator.clipboard.writeText(text),
   location: globalThis.location,
   history: globalThis.history,
+  userAgent: globalThis.navigator.userAgent,
 });

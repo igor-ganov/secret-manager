@@ -1,13 +1,14 @@
+import { decodeDevicePoll, decodeDeviceStart } from '../../features/http-api/decoders/decode-device.ts';
+import { decodeDevices } from '../../features/http-api/decoders/decode-devices.ts';
 import { decodeEmpty } from '../../features/http-api/decoders/decode-empty.ts';
 import { decodeIssuedLink } from '../../features/http-api/decoders/decode-issued-link.ts';
 import { decodeKeys } from '../../features/http-api/decoders/decode-keys.ts';
 import { decodeMe } from '../../features/http-api/decoders/decode-me.ts';
 import { decodeSettings } from '../../features/http-api/decoders/decode-settings.ts';
-import { decodeTokens } from '../../features/http-api/decoders/decode-tokens.ts';
 import { decodeValue } from '../../features/http-api/decoders/decode-value.ts';
 import type { Decoder } from '../../features/http-api/decoders/decoder.ts';
 import { readErrorMessage } from '../../features/http-api/read-error-message.ts';
-import type { ApiClient, ApiCredentials, ApiResult } from './api-client.ts';
+import type { ApiClient, ApiCredentials, ApiResult, DeviceClient } from './api-client.ts';
 
 export type FetchFn = (input: string, init: RequestInit) => Promise<Response>;
 
@@ -38,31 +39,36 @@ const decodeResponse = async <T>(response: Response, decode: Decoder<T>): Promis
 const describeFailure = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
+type Caller = <T>(
+  method: string,
+  path: string,
+  decode: Decoder<T>,
+  body?: unknown,
+  headers?: Readonly<Record<string, string>>,
+) => Promise<ApiResult<T>>;
+
+const createCaller =
+  (fetchFn: FetchFn, serverUrl: string, baseHeaders: Readonly<Record<string, string>>): Caller =>
+  async (method, path, decode, body, headers = {}) => {
+    const base = serverUrl.replace(/\/+$/, '');
+    const init: RequestInit = {
+      method,
+      headers: { ...baseHeaders, 'content-type': 'application/json', ...headers },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    };
+    try {
+      return await decodeResponse(await fetchFn(`${base}${path}`, init), decode);
+    } catch (error) {
+      return { ok: false, error: { kind: 'unreachable', message: `Cannot reach ${base}: ${describeFailure(error)}` } };
+    }
+  };
+
+const secretPath = (key: string): string => `/api/secrets/${encodeURIComponent(key)}`;
+
 export const createApiClient =
   (fetchFn: FetchFn) =>
   ({ serverUrl, token }: ApiCredentials): ApiClient => {
-    const base = serverUrl.replace(/\/+$/, '');
-
-    const call = async <T>(
-      method: string,
-      path: string,
-      decode: Decoder<T>,
-      body?: unknown,
-    ): Promise<ApiResult<T>> => {
-      const init: RequestInit = {
-        method,
-        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      };
-      try {
-        return await decodeResponse(await fetchFn(`${base}${path}`, init), decode);
-      } catch (error) {
-        return { ok: false, error: { kind: 'unreachable', message: `Cannot reach ${base}: ${describeFailure(error)}` } };
-      }
-    };
-
-    const secretPath = (key: string): string => `/api/secrets/${encodeURIComponent(key)}`;
-
+    const call = createCaller(fetchFn, serverUrl, { authorization: `Bearer ${token}` });
     return {
       me: () => call('GET', '/api/me', decodeMe),
       keys: () => call('GET', '/api/secrets', decodeKeys),
@@ -72,7 +78,17 @@ export const createApiClient =
       remove: (key) => call('DELETE', secretPath(key), decodeEmpty),
       settings: () => call('GET', '/api/settings', decodeSettings),
       saveSettings: (linkTtlMinutes) => call('PUT', '/api/settings', decodeEmpty, { linkTtlMinutes }),
-      tokens: () => call('GET', '/api/tokens', decodeTokens),
+      devices: () => call('GET', '/api/devices', decodeDevices),
       revokeToken: (id) => call('DELETE', `/api/tokens/${encodeURIComponent(id)}`, decodeEmpty),
+    };
+  };
+
+export const createDeviceClient =
+  (fetchFn: FetchFn) =>
+  (serverUrl: string): DeviceClient => {
+    const call = createCaller(fetchFn, serverUrl, {});
+    return {
+      start: (label) => call('POST', '/api/device/start', decodeDeviceStart, { label }),
+      poll: (pollToken) => call('GET', '/api/device/poll', decodeDevicePoll, undefined, { 'x-poll-token': pollToken }),
     };
   };

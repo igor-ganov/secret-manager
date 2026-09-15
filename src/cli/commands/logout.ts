@@ -5,12 +5,12 @@ import type { Command } from './command.ts';
 /* Best effort: the token is dropped locally even when the server cannot be
    reached, so a stale credential never lingers on disk. */
 const revokeCurrent = async (client: ApiClient): Promise<void> => {
-  const tokens = await client.tokens();
-  if (!tokens.ok) {
+  const devices = await client.devices();
+  if (!devices.ok) {
     return;
   }
   await Promise.all(
-    tokens.value.tokens.filter((token) => token.current).map((token) => client.revokeToken(token.id)),
+    devices.value.tokens.filter((token) => token.current).map((token) => client.revokeToken(token.id)),
   );
 };
 

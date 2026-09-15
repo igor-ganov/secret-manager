@@ -1,5 +1,9 @@
 # HTTP API — requirements
 
+> **Superseded in part.** Telegram Login (US-1, and token creation in US-3) was replaced by
+> passkey accounts and device approval; see [passkey-accounts](../passkey-accounts/requirements.md)
+> and [device-login](../device-login/requirements.md). US-2 and US-4–US-6 still apply.
+
 ## Overview
 
 The Telegram bot is one input port over a shared domain (per-user secrets, one-time

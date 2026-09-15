@@ -18,7 +18,9 @@
     "db:migrate": "wrangler d1 execute secret-manager --remote --file schema.sql -y"
   },
   "dependencies": {
-    "grammy": "^1.30.0"
+    "@simplewebauthn/server": "^14.0.2",
+    "grammy": "^1.30.0",
+    "qrcode-generator": "^2.0.4"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.14.5",

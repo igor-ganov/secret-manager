@@ -7,13 +7,13 @@ import type { ActionDeps } from '../action-deps.ts';
    appears, in one patch, so typing is never wiped by a late response. */
 export const loadWorkspace =
   ({ api, store }: ActionDeps) =>
-  async (user: MeResponse, botId: number): Promise<void> => {
-    const [keys, settings, tokens] = await Promise.all([api.keys(), api.settings(), api.tokens()]);
+  async (user: MeResponse): Promise<void> => {
+    const [keys, settings, devices] = await Promise.all([api.keys(), api.settings(), api.devices()]);
     store.patch({
-      session: { kind: 'signed-in', user, botId },
+      session: { kind: 'signed-in', user },
       keys: valueOr(keys, { keys: [] }).keys,
       settings: valueOr(settings, initialState.settings),
-      tokens: valueOr(tokens, { tokens: [] }).tokens,
+      devices: valueOr(devices, initialState.devices),
       rowModes: {},
       error: undefined,
     });
