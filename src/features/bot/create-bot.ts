@@ -90,7 +90,7 @@ export const createBot = ({
       return owner;
     }
     const label = ctx.from?.username !== undefined ? `@${ctx.from.username}` : (ctx.from?.first_name ?? 'Telegram');
-    const { url } = await deviceLogin.start('telegram', `Telegram chat ${label}`, String(telegramUserId));
+    const { url } = await deviceLogin.start({ kind: 'telegram', label: `Telegram chat ${label}`, subject: String(telegramUserId), callback: '' });
     await ctx.reply(`${LOGIN_TEXT}\n${url}`);
     return undefined;
   };

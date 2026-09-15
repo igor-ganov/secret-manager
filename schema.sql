@@ -65,15 +65,21 @@ CREATE TABLE IF NOT EXISTS enrollments (
   expires_at INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS login_requests (
+-- Replaced by device_requests (SQLite cannot add columns idempotently;
+-- requests live ten minutes, so nothing is lost).
+DROP TABLE IF EXISTS login_requests;
+
+CREATE TABLE IF NOT EXISTS device_requests (
   code_hash TEXT PRIMARY KEY,
   poll_hash TEXT NOT NULL UNIQUE,
   kind TEXT NOT NULL,
   label TEXT NOT NULL,
   subject TEXT NOT NULL,
+  callback TEXT NOT NULL,
   status TEXT NOT NULL,
-  account_id INTEGER,
-  issued_token TEXT,
+  account_id INTEGER NOT NULL,
+  issued_token TEXT NOT NULL,
+  grant_code TEXT NOT NULL,
   expires_at INTEGER NOT NULL
 );
 

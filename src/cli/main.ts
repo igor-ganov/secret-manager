@@ -5,9 +5,11 @@ import { createConfigStore } from './config/create-config-store.ts';
 import { resolveConfigPath } from './config/resolve-config-path.ts';
 import { resolveDefaultServerUrl } from './config/resolve-default-server-url.ts';
 import type { ConsoleIo } from './io/console-io.ts';
+import { createCallbackListener } from './io/create-callback-listener.ts';
 import { createConsoleIo } from './io/create-console-io.ts';
 import { createLineIo } from './io/create-line-io.ts';
 import { createLineReader } from './io/create-line-reader.ts';
+import { openBrowser } from './io/open-browser.ts';
 import { runCommand } from './run-command.ts';
 import { runSession } from './run-session.ts';
 
@@ -26,7 +28,10 @@ const context: CommandContext = {
   readStdin: () => Bun.stdin.text(),
   defaultServerUrl: resolveDefaultServerUrl(process.env),
   deviceLabel: `Console on ${hostname()}`,
-  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  listen: createCallbackListener,
+  /* SECRET_MANAGER_NO_BROWSER keeps tests and headless boxes from launching one. */
+  openBrowser: (url) => (process.env['SECRET_MANAGER_NO_BROWSER'] === undefined ? openBrowser(url) : Promise.resolve(false)),
+  now: Date.now,
 };
 
 const argv = process.argv.slice(2);

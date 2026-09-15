@@ -25,23 +25,33 @@ type Harness = {
 
 type HarnessOptions = {
   readonly config?: CliConfig;
-  /* How many polls answer "pending" before approval; -1 means denied. */
-  readonly pollsBeforeApproval?: number;
+  /* Grant the browser brings to the callback; undefined = it never comes. */
+  readonly callbackGrant?: string;
+  /* Milliseconds until the login request expires. */
+  readonly ttlMs?: number;
 };
 
-const build = (answers: readonly string[], { config = { serverUrl: 'https://s', token: 't' }, pollsBeforeApproval = 0 }: HarnessOptions = {}): Harness => {
+const build = (
+  answers: readonly string[],
+  { config = { serverUrl: 'https://s', token: 't' }, callbackGrant, ttlMs = 60_000 }: HarnessOptions = {},
+): Harness => {
   const queue = [...answers];
   const out: string[] = [];
   const err: string[] = [];
   const hiddenPrompts: string[] = [];
   const calls: string[] = [];
   const configFile = { value: config };
-  let polls = 0;
   const io: ConsoleIo = {
     interactive: true,
     print: (text) => out.push(text),
     printError: (text) => err.push(text),
-    ask: async () => queue.shift(),
+    ask: async (_prompt, signal) => {
+      const answer = queue.shift();
+      /* Like the terminal: an empty queue waits until the prompt is withdrawn. */
+      return answer !== undefined || signal === undefined
+        ? answer
+        : new Promise((resolve) => signal.addEventListener('abort', () => resolve(undefined)));
+    },
     askHidden: async (prompt) => {
       hiddenPrompts.push(prompt);
       return queue.shift();
@@ -70,17 +80,15 @@ const build = (answers: readonly string[], { config = { serverUrl: 'https://s', 
     },
   });
   const fakeDeviceClient = (serverUrl: string): DeviceClient => ({
-    start: async (label) => {
-      calls.push(`start:${serverUrl}:${label}`);
-      return ok({ url: LOGIN_URL, pollToken: 'poll', expiresAt: Date.now() + 60_000 });
+    start: async (label, callback) => {
+      calls.push(`start:${serverUrl}:${label}:${callback}`);
+      return ok({ url: LOGIN_URL, deviceSecret: 'secret', expiresAt: 1000 + ttlMs });
     },
-    poll: async (pollToken) => {
-      calls.push(`poll:${pollToken}`);
-      polls += 1;
-      if (pollsBeforeApproval < 0) {
-        return { ok: false, error: { kind: 'rejected', message: 'gone' } };
-      }
-      return polls > pollsBeforeApproval ? ok({ status: 'approved', token: 'fresh-token' }) : ok({ status: 'pending' });
+    claim: async (deviceSecret, grant) => {
+      calls.push(`claim:${deviceSecret}:${grant}`);
+      return grant === 'good-code'
+        ? ok({ token: 'fresh-token' })
+        : { ok: false, error: { kind: 'rejected', message: 'This login request has expired or was denied.' } };
     },
   });
   const context: CommandContext = {
@@ -97,7 +105,16 @@ const build = (answers: readonly string[], { config = { serverUrl: 'https://s', 
     readStdin: async () => 'from-stdin\n',
     defaultServerUrl: 'https://default',
     deviceLabel: 'Console on box',
-    sleep: async () => undefined,
+    listen: () => ({
+      callbackUrl: 'http://127.0.0.1:5/callback',
+      grant: callbackGrant === undefined ? new Promise<string>(() => undefined) : Promise.resolve(callbackGrant),
+      close: () => calls.push('close'),
+    }),
+    openBrowser: async (url) => {
+      calls.push(`open:${url}`);
+      return true;
+    },
+    now: () => 1000,
   };
   return { context, out, err, hiddenPrompts, calls, configFile };
 };
@@ -164,20 +181,35 @@ describe('runCommand', () => {
     expect(await runCommand(context, [])).toBe(64);
   });
 
-  test('login prints the approval link, polls until approved and stores the token (device-login AC-2.1, AC-2.2)', async () => {
-    const { context, out, calls, configFile } = build([''], { config: {}, pollsBeforeApproval: 2 });
+  test('login opens the link and completes when the browser calls back (device-login AC-2.1, AC-2.2)', async () => {
+    const { context, out, calls, configFile } = build([''], { config: {}, callbackGrant: 'good-code' });
     expect(await runCommand(context, ['login'])).toBe(0);
-    expect(calls).toEqual(['start:https://default:Console on box', 'poll:poll', 'poll:poll', 'poll:poll']);
+    expect(calls).toEqual([
+      'start:https://default:Console on box:http://127.0.0.1:5/callback',
+      `open:${LOGIN_URL}`,
+      'claim:secret:good-code',
+      'close',
+    ]);
     expect(out[1]).toBe(LOGIN_URL);
     expect(configFile.value).toEqual({ serverUrl: 'https://default', token: 'fresh-token' });
     expect(out.at(-1)).toContain('Logged in as Ada (1)');
   });
 
-  test('login exits 2 when the request is denied or expires (AC-2.3)', async () => {
-    const { context, configFile, err } = build(['https://srv'], { config: {}, pollsBeforeApproval: -1 });
-    expect(await runCommand(context, ['login'])).toBe(2);
-    expect(configFile.value).toEqual({});
-    expect(err[0]).toContain('expired or was denied');
+  test('login accepts the typed fallback code when the browser never comes back', async () => {
+    const { context, calls, configFile } = build(['https://srv', 'good-code'], { config: {} });
+    expect(await runCommand(context, ['login'])).toBe(0);
+    expect(calls).toContain('claim:secret:good-code');
+    expect(configFile.value).toEqual({ serverUrl: 'https://srv', token: 'fresh-token' });
+  });
+
+  test('login exits 2 on a wrong code or when the request expires (AC-2.3)', async () => {
+    const wrong = build(['https://srv', 'bad-code'], { config: {} });
+    expect(await runCommand(wrong.context, ['login'])).toBe(2);
+    expect(wrong.configFile.value).toEqual({});
+    expect(wrong.err[0]).toContain('expired');
+    const expired = build(['https://srv'], { config: {}, ttlMs: 0 });
+    expect(await runCommand(expired.context, ['login'])).toBe(2);
+    expect(expired.calls.some((call) => call.startsWith('claim'))).toBe(false);
   });
 
   test('logout revokes the current token and drops it from the config (AC-2.3)', async () => {

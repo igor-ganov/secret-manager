@@ -13,7 +13,7 @@ Telegram bot, a web site, or a Windows console utility, all on the same account.
 | --------------- | -------------------------- | ------------------------------------------------------------- |
 | Web site        | the Worker's root URL      | **passkey** — the account lives here                          |
 | Telegram bot    | `@secret_manager_bot`      | a *device*: the bot sends a link, you approve it on the site  |
-| `secret.exe`    | GitHub release             | a *device*: `secret login` prints a link, you approve it on the site |
+| `secret.exe`    | GitHub release             | a *device*: `secret login` opens the site, your passkey approves it, the browser returns to the utility (or you type the code it shows) |
 
 Another browser or phone joins through a one-time link or QR code from the
 **Devices** section (or `/device` in the bot). A recovery code, shown once at

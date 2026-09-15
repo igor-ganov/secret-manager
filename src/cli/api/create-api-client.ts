@@ -1,4 +1,4 @@
-import { decodeDevicePoll, decodeDeviceStart } from '../../features/http-api/decoders/decode-device.ts';
+import { decodeDeviceClaim, decodeDeviceStart } from '../../features/http-api/decoders/decode-device.ts';
 import { decodeDevices } from '../../features/http-api/decoders/decode-devices.ts';
 import { decodeEmpty } from '../../features/http-api/decoders/decode-empty.ts';
 import { decodeIssuedLink } from '../../features/http-api/decoders/decode-issued-link.ts';
@@ -88,7 +88,8 @@ export const createDeviceClient =
   (serverUrl: string): DeviceClient => {
     const call = createCaller(fetchFn, serverUrl, {});
     return {
-      start: (label) => call('POST', '/api/device/start', decodeDeviceStart, { label }),
-      poll: (pollToken) => call('GET', '/api/device/poll', decodeDevicePoll, undefined, { 'x-poll-token': pollToken }),
+      start: (label, callback) => call('POST', '/api/device/start', decodeDeviceStart, { label, callback }),
+      claim: (deviceSecret, grant) =>
+        call('POST', '/api/device/claim', decodeDeviceClaim, { grant }, { 'x-device-secret': deviceSecret }),
     };
   };

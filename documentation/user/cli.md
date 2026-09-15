@@ -30,16 +30,23 @@ Ctrl+C during a hidden prompt aborts without printing what was typed.
 ```text
 > secret login
 Server URL [https://…]: ⏎        ← Enter keeps the built-in default
-Open this link, sign in with your passkey and approve this device:
+Open this link if the browser did not open by itself:
 https://<server>/#link=…
-Waiting for approval…
-Logged in as Ada (…). Config: C:\Users\you\AppData\Roaming\secret-manager\config.json
+Waiting for the browser to come back. If it does not, type the code shown on the page.
+Code: ▌
+Logged in as My account (…). Config: C:\Users\you\AppData\Roaming\secret-manager\config.json
 ```
 
-Open the link on any device where you can sign in with your passkey (the phone is
-fine), press **Approve**, and the utility continues by itself. The token it receives
-is stored in that file; `secret logout` removes it and revokes it on the server.
-Requests expire after 10 minutes.
+The utility opens the link in your browser. The page asks for your passkey right
+away; once confirmed, the browser is sent back to the utility (a loopback address
+on this machine) and `login` finishes on its own. If that return does not happen —
+the link was opened on another device, or the browser blocked it — the page shows
+a short code: type it at the `Code:` prompt. The code is useless without the
+secret the utility holds, so it can be read out loud.
+
+The token is stored in that config file; `secret logout` removes it and revokes it
+on the server. Requests expire after 10 minutes. Set `SECRET_MANAGER_NO_BROWSER=1`
+to keep the utility from launching a browser (the link is always printed).
 
 ## Commands
 

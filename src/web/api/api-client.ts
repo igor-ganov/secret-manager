@@ -1,5 +1,6 @@
 import type {
   CeremonyOptionsResponse,
+  DeviceApprovalResponse,
   DevicesResponse,
   EnrollmentInfoResponse,
   EnrollmentResponse,
@@ -43,6 +44,5 @@ export type ApiClient = {
   readonly recoveryOptions: (code: string) => Options;
   readonly recoveryVerify: (code: string, response: unknown) => SignedIn;
   readonly loginRequestInfo: (code: string) => Promise<Result<LoginRequestInfoResponse>>;
-  readonly approveDevice: (code: string) => Done;
-  readonly denyDevice: (code: string) => Done;
+  readonly approveDevice: (code: string) => Promise<Result<DeviceApprovalResponse>>;
 };

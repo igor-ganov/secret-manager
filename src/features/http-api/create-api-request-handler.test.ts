@@ -144,47 +144,60 @@ describe('recovery (AC-4.x)', () => {
 });
 
 describe('device login (device-login AC-2.x, AC-3.x)', () => {
-  test('a CLI request is approved on the site and the token reaches only the poller, once', async () => {
+  const CALLBACK = 'http://127.0.0.1:4242/callback';
+  const claim = (call: ReturnType<typeof build>['call'], secret: string, grant: string) =>
+    call('/api/device/claim', { method: 'POST', body: { grant }, headers: { 'x-device-secret': secret } });
+
+  test('approval mints a grant; secret + grant claim the token exactly once', async () => {
     const { call, post, signUp, app } = build();
-    const started = await post('/api/device/start', { label: 'laptop' });
+    const started = await post('/api/device/start', { label: 'laptop', callback: CALLBACK });
     expect(started.status).toBe(201);
-    const { url, pollToken } = await started.json();
+    const { url, deviceSecret } = await started.json();
     const code = url.split('#link=')[1];
-    const poll = () => call('/api/device/poll', { headers: { 'x-poll-token': pollToken } });
-    expect(await (await poll()).json()).toEqual({ status: 'pending' });
-    expect((await call('/api/device/poll', { headers: { 'x-poll-token': code } })).status).toBe(410);
+    expect((await claim(call, deviceSecret, 'abcd-efgh')).status).toBe(410);
 
     const { as } = await signUp();
-    expect(await (await as(`/api/device/${code}`)).json()).toEqual({ kind: 'cli', label: 'laptop' });
-    expect((await as(`/api/device/${code}/approve`, { method: 'POST' })).status).toBe(204);
-    const approved = await (await poll()).json();
-    expect(approved.status).toBe('approved');
-    expect((await poll()).status).toBe(410);
-    expect((await as(`/api/device/${code}`)).status).toBe(404);
+    expect(await (await as(`/api/device/${code}`)).json()).toEqual({ kind: 'cli', label: 'laptop', status: 'pending', grant: '', callback: CALLBACK });
+    const approval = await as(`/api/device/${code}/approve`, { method: 'POST' });
+    expect(approval.status).toBe(200);
+    const { grant, callback } = await approval.json();
+    expect(grant).toMatch(/^[a-z0-9]{4}-[a-z0-9]{4}$/);
+    expect(callback).toBe(CALLBACK);
+    expect(await (await as(`/api/device/${code}`)).json()).toMatchObject({ status: 'approved', grant });
+    expect((await as(`/api/device/${code}/approve`, { method: 'POST' })).status).toBe(404);
 
-    const me = await (await call('/api/me', { headers: { authorization: `Bearer ${approved.token}` } })).json();
+    expect((await claim(call, code, grant)).status).toBe(410);
+    const claimed = await claim(call, deviceSecret, grant.toUpperCase().replace('-', ' '));
+    expect(claimed.status).toBe(200);
+    const { token } = await claimed.json();
+    expect((await claim(call, deviceSecret, grant)).status).toBe(410);
+
+    const me = await (await call('/api/me', { headers: { authorization: `Bearer ${token}` } })).json();
     expect(me.name).toBe('Ada');
     /* The web session from signup plus the CLI token just issued. */
     expect((await app.tokens.list(me.id)).map((record) => record.label)).toEqual(['web', 'laptop']);
   });
 
-  test('denied requests yield nothing', async () => {
+  test('callbacks must be loopback urls; denied requests yield nothing', async () => {
     const { call, post, signUp } = build();
-    const { url, pollToken } = await (await post('/api/device/start', { label: 'laptop' })).json();
+    expect((await post('/api/device/start', { label: 'laptop', callback: 'https://evil.test/callback' })).status).toBe(400);
+    const { url, deviceSecret } = await (await post('/api/device/start', { label: 'laptop' })).json();
     const code = url.split('#link=')[1];
     const { as } = await signUp();
     expect((await as(`/api/device/${code}/deny`, { method: 'POST' })).status).toBe(204);
-    expect((await call('/api/device/poll', { headers: { 'x-poll-token': pollToken } })).status).toBe(410);
+    expect((await claim(call, deviceSecret, 'abcd-efgh')).status).toBe(410);
     expect((await as(`/api/device/${code}/approve`, { method: 'POST' })).status).toBe(404);
+    expect((await as(`/api/device/${code}`)).status).toBe(404);
   });
 
   test('approving a Telegram request links the chat and migrates legacy data (AC-1.2)', async () => {
     const { signUp, app } = build();
     await app.sharing.save(555, 'legacy-key', 'legacy-value');
-    const { url } = await app.deviceLogin.start('telegram', 'Telegram chat @ada', '555');
+    const { url } = await app.deviceLogin.start({ kind: 'telegram', label: 'Telegram chat @ada', subject: '555', callback: '' });
     const code = url.split('#link=')[1];
     const { as, body } = await signUp();
-    expect((await as(`/api/device/${code}/approve`, { method: 'POST' })).status).toBe(204);
+    const approval = await as(`/api/device/${code}/approve`, { method: 'POST' });
+    expect(await approval.json()).toEqual({ kind: 'telegram', grant: '', callback: '' });
     expect(await app.telegramLinks.accountFor(555)).toBe(body.id);
     expect(await (await as('/api/secrets')).json()).toEqual({ keys: ['legacy-key'] });
     expect((await (await as('/api/devices')).json()).telegram).toEqual({ linked: true });

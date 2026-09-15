@@ -26,25 +26,33 @@ needed), sees what is asking, and approves. Depends on
 
 ### US-2 Log the console utility in
 
-- AC-2.1 WHEN `login` runs, THE SYSTEM SHALL print a login link (and the same URL as
-  a code to type), then wait, polling the server, until the owner approves or the
-  request expires (10 min).
-- AC-2.2 WHEN approved, THE SYSTEM SHALL receive an API token labelled with the
-  device label (host name by default), store it with the server URL, and print who
-  it is logged in as.
-- AC-2.3 IF the request expires or is denied, THEN THE SYSTEM SHALL say so and exit
-  with code 2.
-- AC-2.4 Polling SHALL use a separate secret only the requesting device knows; the
-  link code alone SHALL never yield a token.
+- AC-2.1 WHEN `login` runs, THE SYSTEM SHALL start a local callback listener on
+  the loopback address, register the request with that callback, open the login
+  link in the browser (printing it as well), and wait for whichever comes first:
+  the browser calling back with the grant, or the person typing the grant code
+  shown on the page.
+- AC-2.2 WHEN a grant arrives, THE SYSTEM SHALL exchange it — together with the
+  secret only this device holds — for an API token labelled with the device label
+  (host name by default), store it with the server URL, and print who it is logged
+  in as.
+- AC-2.3 IF the request expires, is denied, or the grant is wrong, THEN THE SYSTEM
+  SHALL say so and exit with code 2.
+- AC-2.4 The grant SHALL be useless without the device secret; the link code alone
+  SHALL never yield a token. Callbacks SHALL be accepted only on loopback hosts.
 
 ### US-3 Approve on the site
 
-- AC-3.1 WHEN the site is opened with a login-request link, THE SYSTEM SHALL show
-  what is asking (kind and label) with Approve / Deny; signed-out visitors first sign
-  in (or create an account) and then see the same screen.
-- AC-3.2 Approving a CLI request SHALL create an API token for the account and hand
-  it to the polling device exactly once.
-- AC-3.3 Denying, expiry or reuse SHALL leave no token behind.
+- AC-3.1 WHEN the site is opened with a login-request link, THE SYSTEM SHALL
+  immediately ask for the passkey (no button), and on success approve the request
+  in the same step; a failed or dismissed prompt leaves a button to try again.
+- AC-3.2 Approving a CLI request SHALL create an API token for the account, mint a
+  short grant code, show it on the page as the fallback, and redirect the browser to
+  the device's callback with the grant. Returning to the link later SHALL show the
+  code again.
+- AC-3.3 The device SHALL be able to claim the token exactly once; denial, expiry
+  or reuse leave no token behind.
+- AC-3.4 Approving a Telegram request SHALL link the chat and tell the person to
+  return to Telegram.
 
 ### US-4 Devices overview
 

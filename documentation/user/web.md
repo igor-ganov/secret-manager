@@ -58,9 +58,11 @@ applies to links made from the site, the bot and the console utility.
 ## Approving a device
 
 When the bot or the console utility asks for access, it gives you a link. Opening it
-here shows *what* is asking (for example "The console utility “Console on
-LAPTOP” asks to use your account") with **Approve** and **Deny**. If you are not
-signed in yet, sign in first; the request is still there afterwards.
+asks for your passkey at once and approves the device in the same step. For the
+console utility the browser is then sent back to it; the page also shows a short
+code to type into the utility in case that return fails, and shows it again if you
+reopen the link. For the Telegram bot the page just tells you to go back to the
+chat.
 
 ## Lost every device?
 

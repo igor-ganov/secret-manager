@@ -78,32 +78,51 @@ describe('enrollment store (AC-3.1–3.3)', () => {
 });
 
 describe('login request store (device-login AC-2.4, AC-3.2, AC-3.3)', () => {
-  const request = { codeHash: 'code', pollHash: 'poll', kind: 'cli' as const, label: 'laptop', subject: 'laptop', expiresAt: 2000 };
+  const request = {
+    codeHash: 'code',
+    pollHash: 'poll',
+    kind: 'cli' as const,
+    label: 'laptop',
+    subject: 'laptop',
+    callback: 'http://127.0.0.1:5/callback',
+    expiresAt: 2000,
+  };
 
-  test('approval hands the token to the poller exactly once', async () => {
+  test('approval stores the grant; the token is claimable once with secret + grant', async () => {
     clock.now = 1000;
     const requests = createLoginRequestStore({ databasePath: ':memory:', now });
     await requests.create(request);
-    expect(await requests.peek('code')).toEqual({ kind: 'cli', label: 'laptop', subject: 'laptop', status: 'pending' });
-    expect(await requests.poll('poll')).toEqual({ status: 'pending' });
-    expect(await requests.approve('code', ACCOUNT, 'tok')).toBe(true);
-    expect(await requests.approve('code', ACCOUNT, 'tok')).toBe(false);
-    expect(await requests.poll('poll')).toEqual({ status: 'approved', token: 'tok' });
-    expect(await requests.poll('poll')).toBeUndefined();
-    expect(await requests.poll('code')).toBeUndefined();
+    expect(await requests.peek('code')).toEqual({
+      kind: 'cli',
+      label: 'laptop',
+      subject: 'laptop',
+      callback: 'http://127.0.0.1:5/callback',
+      status: 'pending',
+      grant: '',
+    });
+    expect(await requests.claim('poll', 'abcd-efgh')).toBeUndefined();
+    expect(await requests.approve('code', ACCOUNT, 'tok', 'abcd-efgh')).toBe(true);
+    expect(await requests.approve('code', ACCOUNT, 'tok', 'abcd-efgh')).toBe(false);
+    expect(await requests.peek('code')).toMatchObject({ status: 'approved', grant: 'abcd-efgh' });
+    expect(await requests.claim('code', 'abcd-efgh')).toBeUndefined();
+    expect(await requests.claim('poll', 'abcd-efgh')).toBe('tok');
+    expect(await requests.claim('poll', 'abcd-efgh')).toBeUndefined();
   });
 
-  test('denied and expired requests vanish for the poller', async () => {
+  test('a wrong grant burns the token; denied and expired requests yield nothing', async () => {
     clock.now = 1000;
     const requests = createLoginRequestStore({ databasePath: ':memory:', now });
     await requests.create(request);
-    expect(await requests.deny('code')).toBe(true);
-    expect(await requests.poll('poll')).toBeUndefined();
-    expect(await requests.peek('code')).toMatchObject({ status: 'denied' });
-    await requests.create({ ...request, codeHash: 'c2', pollHash: 'p2', expiresAt: 1100 });
+    await requests.approve('code', ACCOUNT, 'tok', 'abcd-efgh');
+    expect(await requests.claim('poll', 'wrong-code')).toBeUndefined();
+    expect(await requests.claim('poll', 'abcd-efgh')).toBeUndefined();
+    await requests.create({ ...request, codeHash: 'c2', pollHash: 'p2' });
+    expect(await requests.deny('c2')).toBe(true);
+    expect(await requests.approve('c2', ACCOUNT, 't', 'g')).toBe(false);
+    await requests.create({ ...request, codeHash: 'c3', pollHash: 'p3', expiresAt: 1100 });
     clock.now = 1200;
-    expect(await requests.poll('p2')).toBeUndefined();
-    expect(await requests.approve('c2', ACCOUNT, 't')).toBe(false);
+    expect(await requests.approve('c3', ACCOUNT, 't', 'g')).toBe(false);
+    expect(await requests.peek('c3')).toBeUndefined();
   });
 });
 

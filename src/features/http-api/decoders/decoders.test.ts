@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { decodeCeremonyOptions } from './decode-ceremony-options.ts';
-import { decodeDevicePoll, decodeDeviceStart, decodeLoginRequestInfo } from './decode-device.ts';
+import { decodeDeviceApproval, decodeDeviceClaim, decodeDeviceStart, decodeLoginRequestInfo } from './decode-device.ts';
 import { decodeDevices } from './decode-devices.ts';
 import { decodeEnrollment, decodeEnrollmentInfo } from './decode-enrollment.ts';
 import { decodeIssuedLink } from './decode-issued-link.ts';
@@ -25,10 +25,11 @@ describe('decoders', () => {
     expect(decodeDevices(devices)).toEqual(devices);
     expect(decodeEnrollment({ url: 'u', qr: 'q', expiresAt: 1 })).toEqual({ url: 'u', qr: 'q', expiresAt: 1 });
     expect(decodeEnrollmentInfo({ accountName: 'A' })).toEqual({ accountName: 'A' });
-    expect(decodeDeviceStart({ url: 'u', pollToken: 'p', expiresAt: 1 })).toEqual({ url: 'u', pollToken: 'p', expiresAt: 1 });
-    expect(decodeDevicePoll({ status: 'pending' })).toEqual({ status: 'pending' });
-    expect(decodeDevicePoll({ status: 'approved', token: 't' })).toEqual({ status: 'approved', token: 't' });
-    expect(decodeLoginRequestInfo({ kind: 'cli', label: 'l' })).toEqual({ kind: 'cli', label: 'l' });
+    expect(decodeDeviceStart({ url: 'u', deviceSecret: 'p', expiresAt: 1 })).toEqual({ url: 'u', deviceSecret: 'p', expiresAt: 1 });
+    expect(decodeDeviceApproval({ kind: 'cli', grant: 'g', callback: 'c' })).toEqual({ kind: 'cli', grant: 'g', callback: 'c' });
+    expect(decodeDeviceClaim({ token: 't' })).toEqual({ token: 't' });
+    const info: unknown = { kind: 'cli', label: 'l', status: 'approved', grant: 'g', callback: '' };
+    expect(decodeLoginRequestInfo(info)).toEqual({ kind: 'cli', label: 'l', status: 'approved', grant: 'g', callback: '' });
   });
 
   test('reject wrong shapes', () => {
@@ -41,8 +42,8 @@ describe('decoders', () => {
     expect(decodeDevices({ ...devices, telegram: {} })).toBeUndefined();
     expect(decodeEnrollment({ url: 'u' })).toBeUndefined();
     expect(decodeDeviceStart({ url: 'u' })).toBeUndefined();
-    expect(decodeDevicePoll({ status: 'approved' })).toBeUndefined();
-    expect(decodeLoginRequestInfo({ kind: 'other', label: 'l' })).toBeUndefined();
+    expect(decodeDeviceClaim({})).toBeUndefined();
+    expect(decodeLoginRequestInfo({ kind: 'other', label: 'l', status: 'pending', grant: '', callback: '' })).toBeUndefined();
     expect(decodeMe([])).toBeUndefined();
     expect(decodeMe('x')).toBeUndefined();
   });

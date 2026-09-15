@@ -1,6 +1,7 @@
 import type { ApiClient, ApiCredentials, DeviceClient } from '../api/api-client.ts';
 import type { ConfigStore } from '../config/create-config-store.ts';
 import type { ConsoleIo } from '../io/console-io.ts';
+import type { CallbackListener } from '../io/create-callback-listener.ts';
 import type { Outcome } from '../outcome.ts';
 
 export type CommandContext = {
@@ -13,7 +14,10 @@ export type CommandContext = {
   readonly defaultServerUrl: string | undefined;
   /* Name shown to the account owner when this device asks to be approved. */
   readonly deviceLabel: string;
-  readonly sleep: (ms: number) => Promise<void>;
+  /* Loopback listener the browser returns to after approval. */
+  readonly listen: () => CallbackListener;
+  readonly openBrowser: (url: string) => Promise<boolean>;
+  readonly now: () => number;
 };
 
 export type Command = {

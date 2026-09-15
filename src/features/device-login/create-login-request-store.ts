@@ -1,5 +1,5 @@
 import { Database } from 'bun:sqlite';
-import { NO_TOKEN, rowToPoll, rowToView, type LoginRequestRow } from './login-request-row.ts';
+import { claimableToken, NO_ACCOUNT, NO_TOKEN, REQUEST_COLUMNS, rowToView, type LoginRequestRow } from './login-request-row.ts';
 import type { LoginRequestStore } from './login-request-store.ts';
 
 export type LoginRequestStoreOptions = {
@@ -7,60 +7,60 @@ export type LoginRequestStoreOptions = {
   readonly now: () => number;
 };
 
-const COLUMNS = 'kind, label, subject, status, issued_token';
-
 export const createLoginRequestStore = ({ databasePath, now }: LoginRequestStoreOptions): LoginRequestStore => {
   const database = new Database(databasePath, { create: true });
   database.run(
-    `CREATE TABLE IF NOT EXISTS login_requests (
+    `CREATE TABLE IF NOT EXISTS device_requests (
       code_hash TEXT PRIMARY KEY,
       poll_hash TEXT NOT NULL UNIQUE,
       kind TEXT NOT NULL,
       label TEXT NOT NULL,
       subject TEXT NOT NULL,
+      callback TEXT NOT NULL,
       status TEXT NOT NULL,
-      account_id INTEGER,
-      issued_token TEXT,
+      account_id INTEGER NOT NULL,
+      issued_token TEXT NOT NULL,
+      grant_code TEXT NOT NULL,
       expires_at INTEGER NOT NULL
     )`,
   );
 
-  const insert = database.query<undefined, [string, string, string, string, string, number]>(
-    `INSERT INTO login_requests (code_hash, poll_hash, kind, label, subject, status, issued_token, expires_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, 'pending', '', ?6)`,
+  const insert = database.query<undefined, [string, string, string, string, string, string, number, string, number]>(
+    `INSERT INTO device_requests (code_hash, poll_hash, kind, label, subject, callback, status, account_id, issued_token, grant_code, expires_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending', ?7, ?8, '', ?9)`,
   );
-  const sweep = database.query<undefined, [number]>('DELETE FROM login_requests WHERE expires_at <= ?1');
+  const sweep = database.query<undefined, [number]>('DELETE FROM device_requests WHERE expires_at <= ?1');
   const selectByCode = database.query<LoginRequestRow, [string, number]>(
-    `SELECT ${COLUMNS} FROM login_requests WHERE code_hash = ?1 AND expires_at > ?2`,
+    `SELECT ${REQUEST_COLUMNS} FROM device_requests WHERE code_hash = ?1 AND expires_at > ?2`,
   );
   const selectByPoll = database.query<LoginRequestRow, [string, number]>(
-    `SELECT ${COLUMNS} FROM login_requests WHERE poll_hash = ?1 AND expires_at > ?2`,
+    `SELECT ${REQUEST_COLUMNS} FROM device_requests WHERE poll_hash = ?1 AND expires_at > ?2`,
   );
-  const approve = database.query<undefined, [number, string, string, number]>(
-    `UPDATE login_requests SET status = 'approved', account_id = ?1, issued_token = ?2
-     WHERE code_hash = ?3 AND status = 'pending' AND expires_at > ?4`,
+  const approve = database.query<undefined, [number, string, string, string, number]>(
+    `UPDATE device_requests SET status = 'approved', account_id = ?1, issued_token = ?2, grant_code = ?3
+     WHERE code_hash = ?4 AND status = 'pending' AND expires_at > ?5`,
   );
   const deny = database.query<undefined, [string, number]>(
-    `UPDATE login_requests SET status = 'denied' WHERE code_hash = ?1 AND status = 'pending' AND expires_at > ?2`,
+    `UPDATE device_requests SET status = 'denied' WHERE code_hash = ?1 AND status = 'pending' AND expires_at > ?2`,
   );
   const clearToken = database.query<undefined, [string]>(
-    "UPDATE login_requests SET issued_token = '' WHERE poll_hash = ?1",
+    "UPDATE device_requests SET issued_token = '' WHERE poll_hash = ?1",
   );
 
   const changed = (): boolean => database.query<{ readonly n: number }, []>('SELECT changes() AS n').get()?.n === 1;
 
   return {
-    create: async ({ codeHash, pollHash, kind, label, subject, expiresAt }) => {
+    create: async ({ codeHash, pollHash, kind, label, subject, callback, expiresAt }) => {
       sweep.run(now());
-      insert.run(codeHash, pollHash, kind, label, subject, expiresAt);
+      insert.run(codeHash, pollHash, kind, label, subject, callback, NO_ACCOUNT, NO_TOKEN, expiresAt);
     },
     peek: async (codeHash) => {
       const row = selectByCode.get(codeHash, now());
       return row ? rowToView(row) : undefined;
     },
-    approve: async (codeHash, accountId, issuedToken) =>
+    approve: async (codeHash, accountId, issuedToken, grant) =>
       database.transaction(() => {
-        approve.run(accountId, issuedToken ?? NO_TOKEN, codeHash, now());
+        approve.run(accountId, issuedToken, grant, codeHash, now());
         return changed();
       })(),
     deny: async (codeHash) =>
@@ -68,11 +68,11 @@ export const createLoginRequestStore = ({ databasePath, now }: LoginRequestStore
         deny.run(codeHash, now());
         return changed();
       })(),
-    poll: async (pollHash) =>
+    claim: async (pollHash, grant) =>
       database.transaction(() => {
-        const row = selectByPoll.get(pollHash, now());
+        const token = claimableToken(selectByPoll.get(pollHash, now()) ?? undefined, grant);
         clearToken.run(pollHash);
-        return row ? rowToPoll(row) : undefined;
+        return token;
       })(),
   };
 };

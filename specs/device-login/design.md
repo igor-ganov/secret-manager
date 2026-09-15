@@ -5,35 +5,38 @@ Satisfies [requirements](./requirements.md).
 ## 1. Data
 
 ```sql
-login_requests(code_hash PK, poll_hash, kind ('cli'|'telegram'), label, subject,
-               status ('pending'|'approved'|'denied'), account_id NULL,
-               issued_token NULL, expires_at)
+device_requests(code_hash PK, poll_hash UNIQUE, kind ('cli'|'telegram'), label, subject,
+                callback, status ('pending'|'approved'|'denied'), account_id,
+                issued_token, grant_code, expires_at)
 telegram_links(telegram_user_id PK, account_id, linked_at)
 ```
 
-Ports `LoginRequestStore` and `TelegramLinkStore` (sqlite + D1). The clear
-`issued_token` sits in the row between approval and the device's next poll
-(seconds, ≤10 min), then is cleared on read; the row expires regardless.
+Ports `LoginRequestStore` and `TelegramLinkStore` (sqlite + D1). `login_requests`
+is dropped and recreated as `device_requests` because SQLite cannot add columns
+idempotently; requests live ten minutes, so nothing is lost.
 
-Two secrets per request (AC-2.4): the **code** (in the link the owner opens) and
-the **poll token** (only the requesting device has it). Both 32 random bytes,
-stored hashed.
+Three secrets per request (AC-2.4): the **code** (in the link the owner opens) and
+the **device secret** (only the requesting device holds it), both 32 random bytes
+stored hashed; and after approval the short **grant** (8 characters, typed by hand
+when the redirect fails), which only works together with the device secret. The
+clear token sits in the row between approval and the claim, then is cleared.
 
 ## 2. Routes
 
 | Method | Path                       | Auth | Purpose                                              |
 | ------ | -------------------------- | ---- | ---------------------------------------------------- |
-| POST   | /api/device/start          | none, limited | `{ label }` → `{ url, pollToken, expiresAt }` (CLI) |
-| GET    | /api/device/poll           | none, header `x-poll-token` | `{ status: 'pending' }` \| `{ status: 'approved', token }` \| 410 |
-| GET    | /api/device/:code          | user | `{ kind, label }` or 404 (AC-3.1)                    |
-| POST   | /api/device/:code/approve  | user | approve (AC-3.2, AC-1.2)                             |
+| POST   | /api/device/start          | none, limited | `{ label, callback? }` → `{ url, deviceSecret, expiresAt }`; callback must be a loopback http url |
+| POST   | /api/device/claim          | none, limited, header `x-device-secret` | `{ grant }` → `{ token }` once, else 410 |
+| GET    | /api/device/:code          | user | `{ kind, label, status, grant, callback }` or 404    |
+| POST   | /api/device/:code/approve  | user | approve → `{ kind, grant, callback }` (AC-3.2, AC-1.2) |
 | POST   | /api/device/:code/deny     | user | deny (AC-3.3)                                        |
 | GET    | /api/devices               | user | `{ passkeys, telegram: { linked }, tokens }` (AC-4.1)|
 | DELETE | /api/telegram              | user | unlink the chat                                      |
 
 Approval strategy by kind (strategy map, no branching in the route):
 
-- `cli`: `tokens.create(accountId, label)` → store clear token on the request.
+- `cli`: `tokens.create(accountId, label)`, mint a grant, store both on the request,
+  answer `{ grant, callback }`.
 - `telegram`: `telegramLinks.link(subject, accountId)`, then
   `secrets.reassign(subject, accountId)` and `settings.reassign(subject, accountId)`
   (no-ops when nothing is stored), then `notifyTelegram(subject, 'Linked …')` through
@@ -43,34 +46,41 @@ Link url: `<origin>/#link=<code>`.
 
 ## 3. Bot
 
-`createBot` gains `deviceLogin: { loginUrlFor(telegramUserId, label) }`,
-`enrollment: { enrollmentUrlFor(accountId) }`, `telegramLinks`. A `resolveOwner`
-middleware maps `ctx.from.id` → account id; when there is none it replies with the
-login link and stops (AC-1.1). `/start` shows help plus, when unlinked, the link.
-`/device` → enrollment url (AC-1.4); `/logout` → unlink (AC-1.5). Callback queries
-from an unlinked user just get the link too.
+`createBot` gains `deviceLogin`, `enrollmentIssuer`, `telegramLinks`. A
+`requireOwner` gate maps `ctx.from.id` → account id; when there is none it replies
+with the login link and stops (AC-1.1). `/start` shows help plus, when unlinked, the
+link. `/device` → enrollment url (AC-1.4); `/logout` → unlink (AC-1.5). Callback
+queries from an unlinked user just get the link too.
 
 ## 4. CLI
 
-`login`: server url prompt as before → `POST /api/device/start` with label =
-`os.hostname()` → prints the url → polls every 2 s (`context.sleep`, injectable)
-until `approved` (store token, print `whoami`), or 410 (expired/denied → code 2).
-The token paste path is removed.
+`login`: server url prompt → `Bun.serve` on `127.0.0.1:0` serving
+`GET /callback?grant=…` (answers a "you can close this window" page) →
+`POST /api/device/start` with label = `Console on <hostname>` and that callback →
+prints the url and opens it (`cmd /c start`, `open`, `xdg-open`; best effort) →
+races the callback against `io.ask('Code: ', signal)` and the expiry. The ask takes
+an `AbortSignal`: the terminal prompt is dropped when the callback wins, and the
+piped line reader keeps an unconsumed line for the next prompt. Then
+`POST /api/device/claim` with the device secret → store, print `whoami`.
 
 ## 5. Site
 
-`#link=<code>` route: signed-out visitors see the normal anonymous view with a
-banner "Sign in to approve a device"; once signed in, the approval card shows kind
-and label with Approve / Deny; after approval the hash is cleared. **Devices**
-section lists passkeys, the Telegram chat (Unlink) and tokens (Revoke).
+`#link=<code>` is a standalone page (no workspace): on load the passkey ceremony
+runs at once, whatever the session state (approving re-authenticates), then
+`approve`. For a CLI request the page shows the grant as the fallback and
+navigates to `callback?grant=…`; reopened later, `GET /api/device/:code` returns
+the grant so the code screen comes back. A failed prompt leaves "Continue with
+passkey" to retry. Telegram requests end with "return to Telegram".
 
 ## 6. Tests
 
 - Store tests; request-level tests for every route including "code alone never
-  yields a token" and "poll consumes the token once".
+  yields a token", "claim needs the device secret and the grant", "claim works once",
+  loopback-only callbacks.
 - Bot tests: unlinked user gets the link and no secret is stored; linked user acts
   as the account; `/device`, `/logout`.
-- CLI: `login` against a fake client whose poll resolves after N calls; the
-  piped-process integration test approves through the in-process API.
-- E2E: open `#link=<code>` signed in, approve, then `GET /api/device/poll` returns a
-  token that authenticates `/api/me`.
+- CLI: `login` against fake clients — callback wins, typed code wins, expiry; the
+  piped-process integration test approves through the API and hits the callback.
+- E2E: open `#link=<code>` with a virtual authenticator; the page approves, shows
+  the grant and redirects to a local listener; the claim yields a working token.
+  Without a callback the code alone (typed) claims the token.

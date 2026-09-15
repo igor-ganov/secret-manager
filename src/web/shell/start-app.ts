@@ -34,6 +34,7 @@ export const startApp = async (env: AppEnvironment): Promise<void> => {
     store,
     clipboard,
     clearHash: () => clearHash(history, location),
+    navigate: (url) => location.assign(url),
     deviceName,
   });
 

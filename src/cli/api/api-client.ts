@@ -1,5 +1,5 @@
 import type {
-  DevicePollResponse,
+  DeviceClaimResponse,
   DeviceStartResponse,
   DevicesResponse,
   IssuedLinkResponse,
@@ -37,6 +37,6 @@ export type ApiClient = {
 
 /* The unauthenticated half of the device-login flow (device-login US-2). */
 export type DeviceClient = {
-  readonly start: (label: string) => Promise<ApiResult<DeviceStartResponse>>;
-  readonly poll: (pollToken: string) => Promise<ApiResult<DevicePollResponse>>;
+  readonly start: (label: string, callback: string) => Promise<ApiResult<DeviceStartResponse>>;
+  readonly claim: (deviceSecret: string, grant: string) => Promise<ApiResult<DeviceClaimResponse>>;
 };

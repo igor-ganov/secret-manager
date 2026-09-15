@@ -1,4 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 
 /* Locator contract with src/web (labels and headings are the UI's public API). */
 const UI = {
@@ -135,31 +137,68 @@ test.describe('accounts (passkey-accounts)', () => {
   });
 });
 
+const isAddressInfo = (value: unknown): value is AddressInfo => value instanceof Object && 'port' in value;
+
+/* Stands in for the console utility's loopback listener. */
+const listen = async (): Promise<{ callback: string; grant: Promise<string>; close: () => void }> => {
+  let settle: (grant: string) => void = () => undefined;
+  const grant = new Promise<string>((resolve) => {
+    settle = resolve;
+  });
+  const server = createServer((req, res) => {
+    settle(new URL(req.url ?? '/', 'http://127.0.0.1').searchParams.get('grant') ?? '');
+    res.writeHead(200, { 'content-type': 'text/html' });
+    res.end('<title>Device linked</title><h1>Device linked</h1>');
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  const port = isAddressInfo(address) ? address.port : 0;
+  return { callback: `http://127.0.0.1:${port}/callback`, grant, close: () => server.close() };
+};
+
 test.describe('device login (device-login)', () => {
-  test('a CLI request is approved on the site and only then yields a token (AC-2.x, AC-3.x)', async ({ page, request }) => {
-    const started = await request.post('/api/device/start', { data: { label: 'laptop' } });
-    const { url, pollToken } = await started.json();
-    const poll = () => request.get('/api/device/poll', { headers: { 'x-poll-token': pollToken } });
-    expect(await (await poll()).json()).toEqual({ status: 'pending' });
+  test('the link asks for the passkey at once, approves, shows the code and returns to the device (AC-2.x, AC-3.x)', async ({ page, request }) => {
+    const listener = await listen();
+    const started = await request.post('/api/device/start', { data: { label: 'laptop', callback: listener.callback } });
+    const { url, deviceSecret } = await started.json();
 
     await signUp(page);
     await page.goto(url);
-    await expect(page.getByText('The console utility “laptop” asks to use your account.')).toBeVisible();
-    await page.getByRole('button', { name: 'Approve' }).click();
-    await expect(page.getByRole('status')).toContainText('Device approved');
-    await expect(page).toHaveURL(/\/$/);
+    /* No button pressed: the ceremony ran on load and the page moved on. */
+    await expect(page.getByRole('heading', { name: 'Device linked' })).toBeVisible();
+    const grant = await listener.grant;
+    expect(grant).toMatch(/^[a-z0-9]{4}-[a-z0-9]{4}$/);
+    listener.close();
 
-    const approved = await (await poll()).json();
-    expect(approved.status).toBe('approved');
-    const me = await request.get('/api/me', { headers: { authorization: `Bearer ${approved.token}` } });
+    const claimed = await request.post('/api/device/claim', { data: { grant }, headers: { 'x-device-secret': deviceSecret } });
+    expect(claimed.status()).toBe(200);
+    const { token } = await claimed.json();
+    const me = await request.get('/api/me', { headers: { authorization: `Bearer ${token}` } });
     expect((await me.json()).name).toBe(NAME);
-    await expect(page.getByRole('button', { name: 'Revoke laptop' })).toBeVisible();
+
+    /* Coming back to the link shows the fallback code again. */
+    await page.goto(url);
+    await expect(page.getByText('Approved: “laptop” can use your account.')).toBeVisible();
+    await expect(page.locator('pre')).toHaveText(grant);
   });
 
-  test('a signed-out visitor is told to sign in first (AC-3.1)', async ({ page, request }) => {
-    const { url } = await (await request.post('/api/device/start', { data: { label: 'laptop' } })).json();
+  test('without a callback the code on the page is the way back (AC-3.2)', async ({ page, request }) => {
+    const { url, deviceSecret } = await (await request.post('/api/device/start', { data: { label: 'laptop' } })).json();
+    await signUp(page);
     await page.goto(url);
-    await expect(page.getByText('A device is asking for access. Continue to review and approve it.')).toBeVisible();
+    await expect(page.getByText('Approved: “laptop” can use your account.')).toBeVisible();
+    const grant = (await page.locator('pre').textContent()) ?? '';
+    const claimed = await request.post('/api/device/claim', { data: { grant: grant.toUpperCase() }, headers: { 'x-device-secret': deviceSecret } });
+    expect(claimed.status()).toBe(200);
+    expect((await request.post('/api/device/claim', { data: { grant }, headers: { 'x-device-secret': deviceSecret } })).status()).toBe(410);
+  });
+
+  test('a visitor without a passkey on this device gets a retry button, nothing else (AC-3.1)', async ({ page, request }) => {
+    const { url } = await (await request.post('/api/device/start', { data: { label: 'laptop' } })).json();
+    await addAuthenticator(page);
+    await page.goto(url);
+    await expect(page.getByRole('button', { name: 'Continue with passkey' })).toBeVisible();
+    await expect(page.getByRole('alert')).toBeVisible();
   });
 });
 

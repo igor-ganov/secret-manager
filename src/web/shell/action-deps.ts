@@ -8,6 +8,8 @@ export type ActionDeps = {
   readonly clipboard: (text: string) => Promise<void>;
   /* Drops the fragment once a link/enroll code has been used. */
   readonly clearHash: () => void;
+  /* Sends the browser back to a device's loopback callback. */
+  readonly navigate: (url: string) => void;
   /* Default label for passkeys created in this browser. */
   readonly deviceName: string;
 };
