@@ -3,7 +3,9 @@
 Share secrets through one-time links and keep per-user key/value pairs — from a
 Telegram bot, a web site, or a Windows console utility, all on the same account.
 
-**Live bot: [@secret_manager_bot](https://t.me/secret_manager_bot)**
+**Live bot: [@secret_manager_bot](https://t.me/secret_manager_bot)** ·
+**Site: [secret-manager.igor-ganov.workers.dev](https://secret-manager.igor-ganov.workers.dev)** ·
+**Windows CLI: [download secret.exe](https://github.com/igor-ganov/secret-manager/releases/latest/download/secret.exe)**
 
 ## Three ways in
 
@@ -98,6 +100,10 @@ Local long-polling mode (`bun start`) and the webhook cannot run at the same tim
 Pushes to `main` run tests, lint, type-check and the browser E2E suite, then migrate D1 and deploy (`.github/workflows/deploy.yml`).
 
 ## Console utility
+
+Ready-made build: [secret.exe](https://github.com/igor-ganov/secret-manager/releases/latest/download/secret.exe)
+(published by `.github/workflows/release.yml` on every `v*` tag, with the production
+server baked in). From source:
 
 ```sh
 bun run build:cli                                        # → dist/secret.exe (Windows x64)
