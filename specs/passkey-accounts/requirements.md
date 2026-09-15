@@ -18,8 +18,8 @@ account.
 
 ### US-1 Create an account
 
-- AC-1.1 WHEN a visitor confirms "Create a new account on this device" and
-  completes a passkey registration ceremony, THE SYSTEM SHALL create an account, store the passkey
+- AC-1.1 WHEN a visitor presses "Continue with passkey", no stored credential is
+  used, and the registration ceremony that follows completes, THE SYSTEM SHALL create an account, store the passkey
   (credential id, public key, counter, transports, backed-up flag, label) and sign
   the browser in.
 - AC-1.2 THE SYSTEM SHALL show a recovery code exactly once after signup; only its
@@ -34,8 +34,8 @@ account.
 - AC-2.1 THE SYSTEM SHALL offer a single entry point, "Continue with passkey":
   WHEN the authentication ceremony completes with a stored credential, THE SYSTEM
   SHALL set a session and show the workspace; WHEN it ends without a login, THE
-  SYSTEM SHALL offer "Create a new account on this device" (US-1) — never create an
-  account without that explicit confirmation.
+  SYSTEM SHALL start the registration ceremony at once (US-1) — the device's own
+  passkey-creation dialog is the confirmation; nothing is created if it is dismissed.
 - AC-2.2 THE SYSTEM SHALL persist the signature counter and reject an assertion
   whose counter is not greater than the stored one when both are non-zero.
 - AC-2.3 Challenges SHALL be ≥16 random bytes, single-use (deleted on the first

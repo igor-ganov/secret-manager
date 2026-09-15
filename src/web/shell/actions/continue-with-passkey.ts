@@ -3,16 +3,16 @@ import { getCredential } from '../../auth/get-credential.ts';
 import { runCeremony } from '../../auth/run-ceremony.ts';
 import type { ActionDeps } from '../action-deps.ts';
 import { finishSignIn } from './finish-sign-in.ts';
+import { signUp } from './sign-up.ts';
 
-/* One entry point. The browser looks for a passkey of this site; when none
-   is used (there is none, or the prompt was dismissed) the card offers to
-   create an account instead — a confirmation, so a dismissed login can
-   never silently become a second account. */
+/* One action. The browser looks for a passkey of this site and signs in;
+   when none is used, an account is created right away — the passkey
+   creation dialog the device shows is the confirmation. */
 export const continueWithPasskey = (deps: ActionDeps) => async (): Promise<void> => {
-  const { api, store } = deps;
+  const { api } = deps;
   await matchResult(
     await runCeremony(api.loginOptions, getCredential, api.loginVerify),
     finishSignIn(deps),
-    async () => store.patch({ loginAttempted: true, error: undefined }),
+    () => signUp(deps)(),
   );
 };

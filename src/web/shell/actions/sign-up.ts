@@ -6,7 +6,8 @@ import { finishSignIn } from './finish-sign-in.ts';
 
 const DEFAULT_NAME = 'My account';
 
-/* Reached only from the "no passkey used" fallback of continueWithPasskey. */
+/* Second half of continueWithPasskey: no passkey was used, so create one
+   together with the account. */
 export const signUp = (deps: ActionDeps) => async (): Promise<void> => {
   const { api, store, deviceName } = deps;
   await matchResult(
