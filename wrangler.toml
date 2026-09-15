@@ -5,6 +5,11 @@ compatibility_date = "2026-06-01"
 [observability]
 enabled = true
 
+# The site is built into public/ by `bun run build:web`; requests that match
+# a file are served as static assets, everything else reaches the worker.
+[assets]
+directory = "./public"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "secret-manager"

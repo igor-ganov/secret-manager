@@ -1,7 +1,10 @@
 import { webhookCallback } from 'grammy';
+import { createD1ApiTokenStore } from './features/api-tokens/create-d1-api-token-store.ts';
+import { createAppRequestHandler } from './features/app/create-app-request-handler.ts';
 import { BOT_COMMANDS, createBot } from './features/bot/create-bot.ts';
 import { createD1PendingSetStore } from './features/bot/create-d1-pending-set-store.ts';
 import type { D1Database } from './features/cloudflare/d1-types.ts';
+import { createApiRequestHandler } from './features/http-api/create-api-request-handler.ts';
 import {
   createLinkRequestHandler,
   LINK_PATH_PREFIX,
@@ -10,6 +13,8 @@ import { createD1OneTimeLinkStore } from './features/one-time-links/create-d1-on
 import { createToken } from './features/one-time-links/create-token.ts';
 import { createD1SecretStore } from './features/secrets/create-d1-secret-store.ts';
 import { createD1SettingsStore } from './features/settings/create-d1-settings-store.ts';
+import { createSharingService } from './features/sharing/create-sharing-service.ts';
+import { createD1UserStore } from './features/users/create-d1-user-store.ts';
 
 export const WEBHOOK_PATH = '/webhook';
 
@@ -22,7 +27,7 @@ export type WorkerEnv = {
 
 type App = {
   readonly handleWebhook: (request: Request) => Promise<Response>;
-  readonly handleLink: (request: Request) => Promise<Response>;
+  readonly handleRequest: (request: Request) => Promise<Response>;
   readonly registerCommands: () => Promise<void>;
 };
 
@@ -44,13 +49,17 @@ const createApp = (env: WorkerEnv): App => {
     now: Date.now,
     createToken,
   });
-  const bot = createBot({
-    token: env.BOT_TOKEN,
+  const sharing = createSharingService({
     secrets: createD1SecretStore(env.DB),
     links,
-    pendingSets: createD1PendingSetStore(env.DB),
     settings: createD1SettingsStore(env.DB),
     buildLinkUrl: (token) => `${currentOrigin}${LINK_PATH_PREFIX}${token}`,
+    linkTtlMinutes,
+  });
+  const bot = createBot({
+    token: env.BOT_TOKEN,
+    sharing,
+    pendingSets: createD1PendingSetStore(env.DB),
     linkTtlMinutes,
   });
   const registerCommands = async (): Promise<void> => {
@@ -64,7 +73,16 @@ const createApp = (env: WorkerEnv): App => {
 
   return {
     handleWebhook: webhookCallback(bot, 'std/http', { secretToken: env.WEBHOOK_SECRET }),
-    handleLink: createLinkRequestHandler(links),
+    handleRequest: createAppRequestHandler({
+      api: createApiRequestHandler({
+        sharing,
+        tokens: createD1ApiTokenStore({ database: env.DB, now: Date.now }),
+        users: createD1UserStore(env.DB),
+        botToken: env.BOT_TOKEN,
+        now: Date.now,
+      }),
+      links: createLinkRequestHandler(links),
+    }),
     registerCommands,
   };
 };
@@ -81,6 +99,6 @@ export default {
     if (request.method === 'POST' && url.pathname === WEBHOOK_PATH) {
       return app.handleWebhook(request);
     }
-    return app.handleLink(request);
+    return app.handleRequest(request);
   },
 };

@@ -1,9 +1,6 @@
 import { InlineKeyboard } from 'grammy';
+import { TTL_PRESETS_MINUTES } from '../settings/ttl-presets.ts';
 import { buildCallbackData } from './callback-data.ts';
-
-/* Offered link lifetimes, in minutes; 1440 is one day. Discrete presets keep
-   the choice unambiguous so a typed number is never mistaken for a secret. */
-export const TTL_PRESETS_MINUTES = [1, 5, 15, 30, 60, 1440] as const;
 
 export const buildSettingsKeyboard = (currentMinutes: number): InlineKeyboard =>
   TTL_PRESETS_MINUTES.reduce((keyboard, minutes, index) => {

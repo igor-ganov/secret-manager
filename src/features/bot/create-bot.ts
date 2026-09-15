@@ -1,10 +1,9 @@
 import { Bot, type Context, type Filter, type InlineKeyboard } from 'grammy';
 import type { BotCommand, UserFromGetMe } from 'grammy/types';
-import type { OneTimeLinkStore } from '../one-time-links/one-time-link-store.ts';
-import type { SecretStore } from '../secrets/secret-store.ts';
+import { isValidKey } from '../sharing/is-valid-key.ts';
+import type { IssuedLink, SharingService } from '../sharing/sharing-service.ts';
 import { buildLinkMessage, type LinkMessage } from './build-link-message.ts';
 import { parseCallbackData, type CallbackAction } from './callback-data.ts';
-import { isValidKey } from './is-valid-key.ts';
 import {
   buildCancelSetKeyboard,
   buildDeleteConfirmKeyboard,
@@ -13,7 +12,6 @@ import {
 } from './keyboards.ts';
 import { parseTextMessage } from './parse-text-message.ts';
 import type { PendingSetStore } from './pending-set-store.ts';
-import type { SettingsStore } from '../settings/settings-store.ts';
 
 /* Registered with Telegram so /start /list /settings appear in the native
    command menu and the Menu button; the bot has no reply keyboard. */
@@ -25,12 +23,9 @@ export const BOT_COMMANDS: readonly BotCommand[] = [
 
 export type BotDependencies = {
   readonly token: string;
-  readonly secrets: SecretStore;
-  readonly links: OneTimeLinkStore;
+  readonly sharing: SharingService;
   readonly pendingSets: PendingSetStore;
-  readonly settings: SettingsStore;
-  readonly buildLinkUrl: (token: string) => string;
-  /* Default link lifetime when a user has not chosen one in Settings. */
+  /* Default link lifetime, quoted in the help text. */
   readonly linkTtlMinutes: number;
   /* Supplying a known bot identity skips the getMe call; production omits it
      (grammY initializes lazily), tests pass it to drive updates offline. */
@@ -48,25 +43,15 @@ const HELP_TEXT = [
 
 export const createBot = ({
   token,
-  secrets,
-  links,
+  sharing,
   pendingSets,
-  settings,
-  buildLinkUrl,
   linkTtlMinutes,
   botInfo,
 }: BotDependencies): Bot => {
   const bot = new Bot(token, botInfo ? { botInfo } : undefined);
 
-  const resolveTtlMinutes = async (userId: number): Promise<number> =>
-    (await settings.getTtlMinutes(userId)) ?? linkTtlMinutes;
-
-  const linkReply = async (
-    intro: string,
-    value: string,
-    ttlMinutes: number,
-  ): Promise<LinkMessage> =>
-    buildLinkMessage(intro, buildLinkUrl(await links.issue(value, ttlMinutes * 60 * 1000)), ttlMinutes);
+  const linkReply = (intro: string, link: IssuedLink): LinkMessage =>
+    buildLinkMessage(intro, link.url, link.ttlMinutes);
 
   /* The incoming message holds the secret in clear text; delete it so the value
      does not linger in the chat. Bots may delete incoming messages in private
@@ -83,7 +68,7 @@ export const createBot = ({
   type Reply = (text: string, options: ReplyOptions) => Promise<unknown>;
 
   const sendList = async (reply: Reply, userId: number): Promise<void> => {
-    const keys = await secrets.list(userId);
+    const keys = await sharing.list(userId);
     if (keys.length === 0) {
       await reply('You have no saved keys yet. Send "key value" to create one.', {});
       return;
@@ -95,7 +80,7 @@ export const createBot = ({
     `One-time links currently stay valid for ${minutes} minutes.\nPick how long they should last:`;
 
   const sendSettings = async (reply: Reply, userId: number): Promise<void> => {
-    const minutes = await resolveTtlMinutes(userId);
+    const minutes = await sharing.getTtlMinutes(userId);
     await reply(settingsText(minutes), { reply_markup: buildSettingsKeyboard(minutes) });
   };
 
@@ -129,35 +114,31 @@ export const createBot = ({
 
     const pendingKey = await pendingSets.take(userId);
     if (pendingKey !== undefined) {
-      await secrets.save(userId, pendingKey, text);
+      await sharing.save(userId, pendingKey, text);
       await ctx.reply(`Value of “${pendingKey}” has been updated.`);
       await purgeIncoming(ctx);
       return;
     }
 
     const parsed = parseTextMessage(text);
-    const ttlMinutes = await resolveTtlMinutes(userId);
     switch (parsed.kind) {
       case 'pair': {
         if (!isValidKey(parsed.key)) {
           await ctx.reply('This key is too long. Please use a key under 62 bytes.');
           return;
         }
-        await secrets.save(userId, parsed.key, parsed.value);
-        const { text: pairText, entities: pairEntities } = await linkReply(
+        const { text: pairText, entities: pairEntities } = linkReply(
           `Saved “${parsed.key}”. One-time link to the value:`,
-          parsed.value,
-          ttlMinutes,
+          await sharing.saveAndShare(userId, parsed.key, parsed.value),
         );
         await ctx.reply(pairText, { entities: [...pairEntities] });
         await purgeIncoming(ctx);
         return;
       }
       case 'single': {
-        const { text: singleText, entities: singleEntities } = await linkReply(
+        const { text: singleText, entities: singleEntities } = linkReply(
           'One-time link (nothing was saved):',
-          parsed.value,
-          ttlMinutes,
+          await sharing.share(userId, parsed.value),
         );
         await ctx.reply(singleText, { entities: [...singleEntities] });
         await purgeIncoming(ctx);
@@ -179,18 +160,13 @@ export const createBot = ({
         return;
       }
       case 'get': {
-        const value = await secrets.read(userId, action.key);
-        if (value === undefined) {
+        const link = await sharing.linkFor(userId, action.key);
+        if (link === undefined) {
           await ctx.answerCallbackQuery({ text: 'This key no longer exists.' });
           return;
         }
         await ctx.answerCallbackQuery();
-        const ttlMinutes = await resolveTtlMinutes(userId);
-        const { text, entities } = await linkReply(
-          `One-time link to “${action.key}”:`,
-          value,
-          ttlMinutes,
-        );
+        const { text, entities } = linkReply(`One-time link to “${action.key}”:`, link);
         await ctx.reply(text, { entities: [...entities] });
         return;
       }
@@ -203,8 +179,8 @@ export const createBot = ({
         return;
       }
       case 'set-ttl': {
-        const previous = await resolveTtlMinutes(userId);
-        await settings.setTtlMinutes(userId, action.minutes);
+        const previous = await sharing.getTtlMinutes(userId);
+        await sharing.setTtlMinutes(userId, action.minutes);
         await ctx.answerCallbackQuery({ text: `Saved: ${action.minutes} minutes.` });
         /* Editing to identical content makes Telegram answer 400; the menu
            already shows this value, so only redraw when it actually changed. */
@@ -229,7 +205,7 @@ export const createBot = ({
         return;
       }
       case 'delete-confirm': {
-        await secrets.remove(userId, action.key);
+        await sharing.remove(userId, action.key);
         await ctx.answerCallbackQuery({ text: 'Deleted.' });
         await ctx.editMessageText(`“${action.key}” has been deleted.`);
         await sendList((text, options) => ctx.reply(text, options), userId);

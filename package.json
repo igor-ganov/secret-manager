@@ -6,17 +6,29 @@
   "scripts": {
     "start": "bun run src/main.ts",
     "dev": "bun --hot src/main.ts",
+    "dev:web": "bun run src/dev-web.ts",
+    "cli": "bun run src/cli/main.ts",
     "test": "bun test",
+    "e2e": "playwright test",
+    "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "deploy": "wrangler deploy",
+    "build:web": "bun run scripts/build-web.ts",
+    "build:cli": "bun run scripts/build-cli.ts",
+    "deploy": "bun run build:web && wrangler deploy",
     "db:migrate": "wrangler d1 execute secret-manager --remote --file schema.sql -y"
   },
   "dependencies": {
     "grammy": "^1.30.0"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "^20.14.5",
+    "@playwright/test": "^1.63.0",
     "@types/bun": "latest",
+    "eslint": "^10.10.0",
+    "happy-dom": "^20.14.5",
+    "jiti": "^2.7.0",
     "typescript": "^5.5.0",
+    "typescript-eslint": "^8.70.0",
     "wrangler": "^4.100.0"
   }
 }

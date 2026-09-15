@@ -1,39 +1,23 @@
 import { loadConfig } from './config/load-config.ts';
+import { createLocalApp } from './features/app/create-local-app.ts';
 import { BOT_COMMANDS, createBot } from './features/bot/create-bot.ts';
 import { createPendingSetStore } from './features/bot/create-pending-set-store.ts';
-import {
-  createLinkRequestHandler,
-  LINK_PATH_PREFIX,
-} from './features/one-time-links/create-link-request-handler.ts';
-import { createOneTimeLinkStore } from './features/one-time-links/create-one-time-link-store.ts';
-import { createToken } from './features/one-time-links/create-token.ts';
-import { createSecretStore } from './features/secrets/create-secret-store.ts';
-import { createSettingsStore } from './features/settings/create-settings-store.ts';
+import site from './web/index.html';
 
 const config = loadConfig(Bun.env);
 
-const links = createOneTimeLinkStore({
-  ttlMs: config.linkTtlMinutes * 60 * 1000,
-  now: Date.now,
-  createToken,
-});
-
-const secrets = createSecretStore(config.databasePath);
-const pendingSets = createPendingSetStore();
-const settings = createSettingsStore(config.databasePath);
+const app = createLocalApp(config);
 
 const server = Bun.serve({
   port: config.port,
-  fetch: createLinkRequestHandler(links),
+  routes: { '/': site },
+  fetch: app.handleRequest,
 });
 
 const bot = createBot({
   token: config.botToken,
-  secrets,
-  links,
-  pendingSets,
-  settings,
-  buildLinkUrl: (token) => `${config.baseUrl}${LINK_PATH_PREFIX}${token}`,
+  sharing: app.sharing,
+  pendingSets: createPendingSetStore(),
   linkTtlMinutes: config.linkTtlMinutes,
 });
 
@@ -49,6 +33,6 @@ process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
 await bot.api.setMyCommands([...BOT_COMMANDS]);
 
-console.log(`Link server listening on ${server.url}`);
+console.log(`Site and link server listening on ${server.url}`);
 console.log('Starting Telegram bot (long polling)…');
 await bot.start();
