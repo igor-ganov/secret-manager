@@ -1,5 +1,5 @@
 import { decodeCeremonyOptions } from '../../features/http-api/decoders/decode-ceremony-options.ts';
-import { decodeLoginRequestInfo } from '../../features/http-api/decoders/decode-device.ts';
+import { decodeDeviceApproval, decodeLoginRequestInfo } from '../../features/http-api/decoders/decode-device.ts';
 import { decodeDevices } from '../../features/http-api/decoders/decode-devices.ts';
 import { decodeEmpty } from '../../features/http-api/decoders/decode-empty.ts';
 import { decodeEnrollment, decodeEnrollmentInfo } from '../../features/http-api/decoders/decode-enrollment.ts';
@@ -42,6 +42,5 @@ export const createApiClient = (request: JsonRequester): ApiClient => ({
   recoveryOptions: (code) => request('POST', '/api/recovery/options', decodeCeremonyOptions, { code }),
   recoveryVerify: (code, response) => request('POST', '/api/recovery/verify', decodeSignedIn, { code, response }),
   loginRequestInfo: (code) => request('GET', `/api/device/${enc(code)}`, decodeLoginRequestInfo),
-  approveDevice: (code) => request('POST', `/api/device/${enc(code)}/approve`, decodeEmpty, {}),
-  denyDevice: (code) => request('POST', `/api/device/${enc(code)}/deny`, decodeEmpty, {}),
+  approveDevice: (code) => request('POST', `/api/device/${enc(code)}/approve`, decodeDeviceApproval, {}),
 });

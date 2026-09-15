@@ -115,9 +115,9 @@ const buildBot = (linked = true) => {
     linkTtlMinutes: 5,
     telegramLinks: fakes.telegramLinks,
     deviceLogin: {
-      start: async (kind, label, subject) => {
+      start: async ({ kind, label, subject }) => {
         fakes.loginRequests.push(`${kind}:${label}:${subject}`);
-        return { url: LOGIN_URL, pollToken: 'p', expiresAt: 0 };
+        return { url: LOGIN_URL, deviceSecret: 'p', expiresAt: 0 };
       },
     },
     enrollmentIssuer: async () => ({ url: ENROLL_URL, qr: '', expiresAt: 0 }),

@@ -5,7 +5,6 @@ import type { H } from './h.ts';
 import { renderDevices } from './render-devices.ts';
 import { renderError } from './render-error.ts';
 import { renderKeys } from './render-keys.ts';
-import { renderLinkCard } from './render-link-card.ts';
 import { renderNotice } from './render-notice.ts';
 import { renderSettings } from './render-settings.ts';
 import { renderShareForm } from './render-share-form.ts';
@@ -29,7 +28,6 @@ export const renderWorkspace = (
     ),
   ),
   ...renderError(h, state.error),
-  ...renderLinkCard(h, actions, state.route, state.linkInfo),
   renderNotice(h, actions, state.notice),
   h('p', { attrs: { class: 'toast', 'aria-live': 'polite' } }, state.toast),
   renderShareForm(h, actions),

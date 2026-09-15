@@ -5,8 +5,8 @@ export type Actions = {
   readonly continueWithPasskey: () => Promise<void>;
   readonly recover: (code: string) => Promise<void>;
   readonly enrollHere: (code: string, label: string) => Promise<void>;
-  readonly approveDevice: (code: string) => Promise<void>;
-  readonly denyDevice: (code: string) => Promise<void>;
+  /* The link page: passkey, approval and the return to the device. */
+  readonly approveLink: (code: string) => Promise<void>;
   readonly addPasskeyHere: (label: string) => Promise<void>;
   readonly removePasskey: (id: string) => Promise<void>;
   readonly createEnrollment: () => Promise<void>;

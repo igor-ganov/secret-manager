@@ -6,14 +6,22 @@ export const LOGIN_REQUEST_TTL_MS = 10 * 60 * 1000;
 
 export type StartedLoginRequest = {
   readonly url: string;
-  readonly pollToken: string;
+  /* Only the requesting device holds this; needed to claim the token. */
+  readonly deviceSecret: string;
   readonly expiresAt: number;
 };
 
-/* Shared by the CLI route and the bot: mints the two secrets of a request
-   and returns the link the owner will open. */
+export type StartLoginRequest = {
+  readonly kind: LoginRequestKind;
+  readonly label: string;
+  readonly subject: string;
+  readonly callback: string;
+};
+
+/* Shared by the CLI route and the bot: mints the secrets of a request and
+   returns the link the owner will open. */
 export type DeviceLogin = {
-  readonly start: (kind: LoginRequestKind, label: string, subject: string) => Promise<StartedLoginRequest>;
+  readonly start: (request: StartLoginRequest) => Promise<StartedLoginRequest>;
 };
 
 export const buildLoginRequestUrl = (siteOrigin: string, code: string): string => `${siteOrigin}/#link=${code}`;
@@ -23,18 +31,19 @@ export const createDeviceLogin = (
   siteOrigin: string,
   now: () => number,
 ): DeviceLogin => ({
-  start: async (kind, label, subject) => {
+  start: async ({ kind, label, subject, callback }) => {
     const code = randomBase64url(32);
-    const pollToken = randomBase64url(32);
+    const deviceSecret = randomBase64url(32);
     const expiresAt = now() + LOGIN_REQUEST_TTL_MS;
     await requests.create({
       codeHash: await sha256Hex(code),
-      pollHash: await sha256Hex(pollToken),
+      pollHash: await sha256Hex(deviceSecret),
       kind,
       label,
       subject,
+      callback,
       expiresAt,
     });
-    return { url: buildLoginRequestUrl(siteOrigin, code), pollToken, expiresAt };
+    return { url: buildLoginRequestUrl(siteOrigin, code), deviceSecret, expiresAt };
   },
 });

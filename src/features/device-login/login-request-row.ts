@@ -1,14 +1,19 @@
-import type { LoginRequestKind, LoginRequestStatus, LoginRequestView, PollResult } from './login-request-store.ts';
+import type { LoginRequestKind, LoginRequestStatus, LoginRequestView } from './login-request-store.ts';
 
-/* An empty issued token means "none": the row never holds SQL NULL. */
+/* Empty strings and 0 stand for "none": rows never hold SQL NULL. */
 export const NO_TOKEN = '';
+export const NO_ACCOUNT = 0;
+
+export const REQUEST_COLUMNS = 'kind, label, subject, callback, status, issued_token, grant_code';
 
 export type LoginRequestRow = {
   readonly kind: string;
   readonly label: string;
   readonly subject: string;
+  readonly callback: string;
   readonly status: string;
   readonly issued_token: string;
+  readonly grant_code: string;
 };
 
 const KINDS: readonly LoginRequestKind[] = ['cli', 'telegram'];
@@ -20,17 +25,19 @@ const isStatus = (value: string): value is LoginRequestStatus =>
 
 export const rowToView = (row: LoginRequestRow): LoginRequestView | undefined =>
   isKind(row.kind) && isStatus(row.status)
-    ? { kind: row.kind, label: row.label, subject: row.subject, status: row.status }
+    ? {
+        kind: row.kind,
+        label: row.label,
+        subject: row.subject,
+        callback: row.callback,
+        status: row.status,
+        grant: row.grant_code,
+      }
     : undefined;
 
-/* Denied rows look like unknown ones to the poller, so a denial is final. */
-export const rowToPoll = (row: LoginRequestRow): PollResult | undefined => {
-  switch (row.status) {
-    case 'pending':
-      return { status: 'pending' };
-    case 'approved':
-      return row.issued_token === NO_TOKEN ? undefined : { status: 'approved', token: row.issued_token };
-    default:
-      return undefined;
-  }
-};
+/* The token is handed out only for an approved row whose grant matches and
+   whose token has not been taken yet. */
+export const claimableToken = (row: LoginRequestRow | undefined, grant: string): string | undefined =>
+  row !== undefined && row.status === 'approved' && row.grant_code === grant && row.issued_token !== NO_TOKEN
+    ? row.issued_token
+    : undefined;

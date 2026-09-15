@@ -6,7 +6,7 @@ import { createH } from './h.ts';
 import { renderApp } from './render-app.ts';
 import { renderDevices } from './render-devices.ts';
 import { renderKeys } from './render-keys.ts';
-import { renderLinkCard } from './render-link-card.ts';
+import { renderLinkPage } from './render-link-page.ts';
 import { renderNotice } from './render-notice.ts';
 import { renderSettings } from './render-settings.ts';
 import { ttlLabel } from './ttl-label.ts';
@@ -26,8 +26,7 @@ const actions: Actions = {
   continueWithPasskey: record('continueWithPasskey'),
   recover: record('recover'),
   enrollHere: record('enrollHere'),
-  approveDevice: record('approveDevice'),
-  denyDevice: record('denyDevice'),
+  approveLink: record('approveLink'),
   addPasskeyHere: record('addPasskeyHere'),
   removePasskey: record('removePasskey'),
   createEnrollment: record('createEnrollment'),
@@ -103,14 +102,17 @@ describe('renderDevices (device-login AC-4.1)', () => {
   });
 });
 
-describe('renderLinkCard and renderNotice', () => {
-  test('shows the asking device with Approve/Deny only on the link route', () => {
-    const card = container(renderLinkCard(h, actions, { kind: 'link', code: 'c' }, { kind: 'cli', label: 'laptop' }));
-    expect(card.textContent).toContain('The console utility “laptop” asks to use your account.');
-    card.querySelector<HTMLButtonElement>('button')?.click();
-    expect(calls.splice(0)).toEqual(['approveDevice:c']);
-    expect(container(renderLinkCard(h, actions, { kind: 'link', code: 'c' }, undefined)).textContent).toContain('expired');
-    expect(renderLinkCard(h, actions, { kind: 'home' }, undefined)).toHaveLength(0);
+describe('renderLinkPage and renderNotice', () => {
+  test('waits for the passkey, then shows the fallback code (device-login AC-3.1, AC-3.2)', () => {
+    const waiting = container(renderLinkPage(h, actions, 'c', undefined));
+    expect(waiting.textContent).toContain('Confirm with your passkey');
+    waiting.querySelector<HTMLButtonElement>('button')?.click();
+    expect(calls.splice(0)).toEqual(['approveLink:c']);
+    const approved = container(renderLinkPage(h, actions, 'c', { kind: 'cli', label: 'laptop', status: 'approved', grant: 'abcd-efgh', callback: '' }));
+    expect(approved.textContent).toContain('Approved: “laptop” can use your account.');
+    expect(approved.querySelector('pre')?.textContent).toBe('abcd-efgh');
+    const telegram = container(renderLinkPage(h, actions, 'c', { kind: 'telegram', label: 'Telegram chat @ada', status: 'approved', grant: '', callback: '' }));
+    expect(telegram.textContent).toContain('Go back to Telegram');
   });
 
   test('renders recovery codes and enrollment links with a QR image', () => {

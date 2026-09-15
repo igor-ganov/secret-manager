@@ -8,6 +8,7 @@ const fromFailure = (failure: ApiFailure): Outcome => {
     case 'unauthorized':
       return failed(TOKEN_REJECTED, EXIT.auth);
     case 'rejected':
+      return failed(failure.message, failure.message.includes('login request') ? EXIT.auth : EXIT.rejected);
     case 'unreachable':
       return failed(failure.message, EXIT.rejected);
   }

@@ -57,14 +57,22 @@ export type EnrollmentInfoResponse = { readonly accountName: string };
 export type LoginRequestInfoResponse = {
   readonly kind: 'cli' | 'telegram';
   readonly label: string;
+  readonly status: 'pending' | 'approved' | 'denied';
+  /* Fallback code and callback url; empty until approved / for Telegram. */
+  readonly grant: string;
+  readonly callback: string;
 };
 
 export type DeviceStartResponse = {
   readonly url: string;
-  readonly pollToken: string;
+  readonly deviceSecret: string;
   readonly expiresAt: number;
 };
 
-export type DevicePollResponse =
-  | { readonly status: 'pending' }
-  | { readonly status: 'approved'; readonly token: string };
+export type DeviceApprovalResponse = {
+  readonly kind: 'cli' | 'telegram';
+  readonly grant: string;
+  readonly callback: string;
+};
+
+export type DeviceClaimResponse = { readonly token: string };

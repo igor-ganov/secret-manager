@@ -35,8 +35,9 @@ const run = (args: readonly string[], input: string) => {
   return { proc, finished };
 };
 
-/* Plays the account owner: waits for the CLI to print its link, then
-   approves the request through the API as a signed-in browser would. */
+/* Plays the owner's browser: waits for the CLI to print its link, approves
+   the request through the API, then follows the callback with the grant
+   exactly as the site's redirect would. */
 const approveWhenPrinted = async (stdoutChunks: () => string): Promise<void> => {
   for (;;) {
     const match = /#link=([A-Za-z0-9_-]+)/.exec(stdoutChunks());
@@ -45,7 +46,11 @@ const approveWhenPrinted = async (stdoutChunks: () => string): Promise<void> => 
         method: 'POST',
         headers: { authorization: `Bearer ${ownerToken}` },
       });
-      expect(approve.status).toBe(204);
+      expect(approve.status).toBe(200);
+      const { grant, callback } = await approve.json();
+      expect(callback).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/callback$/);
+      const returned = await fetch(`${callback}?grant=${encodeURIComponent(grant)}`);
+      expect(returned.status).toBe(200);
       return;
     }
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -59,7 +64,8 @@ describe('secret CLI over a pipe', () => {
       stdin: new TextEncoder().encode(`login\n${server.url.origin}\nwhoami\nset api-key\npiped-secret\nlist\nget api-key\nexit\n`),
       stdout: 'pipe',
       stderr: 'pipe',
-      env: { ...process.env, SECRET_MANAGER_CONFIG: configPath },
+      /* Keeps the test from launching a real browser. */
+      env: { ...process.env, SECRET_MANAGER_CONFIG: configPath, SECRET_MANAGER_NO_BROWSER: '1' },
     });
     let collected = '';
     const reading = (async () => {
@@ -73,7 +79,8 @@ describe('secret CLI over a pipe', () => {
     expect(stderr).toBe('');
     expect(code).toBe(0);
     const lines = collected.trim().split('\n');
-    expect(lines[0]).toBe('Open this link, sign in with your passkey and approve this device:');
+    expect(lines[0]).toBe('Open this link if the browser did not open by itself:');
+    expect(lines[1]).toMatch(/#link=/);
     expect(lines[3]).toMatch(/^Logged in as Integration User/);
     expect(lines[4]).toBe(`Integration User (${ACCOUNT})`);
     expect(lines[5]).toBe('Saved “api-key”.');
