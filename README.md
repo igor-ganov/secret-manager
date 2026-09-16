@@ -5,7 +5,7 @@ Telegram bot, a web site, or a Windows console utility, all on the same account.
 
 **Live bot: [@secret_manager_bot](https://t.me/secret_manager_bot)** ·
 **Site: [secret-manager.igor-ganov.workers.dev](https://secret-manager.igor-ganov.workers.dev)** ·
-**Windows CLI: [download secret.exe](https://github.com/igor-ganov/secret-manager/releases/latest/download/secret.exe)**
+**Windows CLI: [installer](https://github.com/igor-ganov/secret-manager/releases/latest/download/secret-setup.exe) · [portable](https://github.com/igor-ganov/secret-manager/releases/latest/download/secret.exe)**
 
 ## One account, three devices
 
@@ -110,12 +110,20 @@ Pushes to `main` run tests, lint, type-check and the browser E2E suite, then mig
 
 ## Console utility
 
-Ready-made build: [secret.exe](https://github.com/igor-ganov/secret-manager/releases/latest/download/secret.exe)
-(published by `.github/workflows/release.yml` on every `v*` tag, with the production
-server baked in). From source:
+Ready-made builds, published by `.github/workflows/release.yml` on every `v*` tag
+with the production server baked in:
+
+- [secret-setup.exe](https://github.com/igor-ganov/secret-manager/releases/latest/download/secret-setup.exe)
+  — installer (Inno Setup): per-user, no admin prompt, adds `secret` to PATH, Start
+  menu entry, uninstaller.
+- [secret.exe](https://github.com/igor-ganov/secret-manager/releases/latest/download/secret.exe)
+  — portable, the same program without installation.
+
+From source:
 
 ```sh
 bun run build:cli                                        # → dist/secret.exe (Windows x64)
+bun run build:installer                                  # → dist/secret-setup.exe (needs Inno Setup 6)
 SECRET_MANAGER_URL=https://<worker>.workers.dev bun run build:cli   # with the server baked in
 bun run cli -- list                                      # run from source
 ```

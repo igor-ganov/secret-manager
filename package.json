@@ -15,7 +15,8 @@
     "build:web": "bun run scripts/build-web.ts",
     "build:cli": "bun run scripts/build-cli.ts",
     "deploy": "bun run build:web && wrangler deploy",
-    "db:migrate": "wrangler d1 execute secret-manager --remote --file schema.sql -y"
+    "db:migrate": "wrangler d1 execute secret-manager --remote --file schema.sql -y",
+    "build:installer": "bun run scripts/build-installer.ts"
   },
   "dependencies": {
     "@simplewebauthn/server": "^14.0.2",

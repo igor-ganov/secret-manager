@@ -72,5 +72,9 @@ Depends on [http-api](../http-api/requirements.md).
 
 - AC-4.1 `bun run build:cli` SHALL produce `dist/secret.exe` for Windows x64 (and
   `bun run cli -- <args>` runs it from source).
+- AC-4.3 `bun run build:installer` SHALL produce `dist/secret-setup.exe`, a per-user
+  installer that puts the program on the user's PATH, adds a Start menu entry and
+  an uninstaller that removes the PATH entry again; every release SHALL publish
+  both the installer and the portable executable.
 - AC-4.2 The default server URL is baked in at build time from
   `SECRET_MANAGER_URL` when present; otherwise `login` asks for it.
