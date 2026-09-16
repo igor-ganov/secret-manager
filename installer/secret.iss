@@ -26,6 +26,9 @@ UninstallDisplayName=Secret manager CLI
 WizardStyle=modern
 DisableProgramGroupPage=yes
 
+[Messages]
+FinishedLabel=Setup has finished installing [name] on your computer.%n%nThe folder was added to your PATH. Open a NEW terminal window (or restart your IDE) and run:  secret login
+
 [Files]
 Source: "..\dist\secret.exe"; DestDir: "{app}"; Flags: ignoreversion
 
@@ -33,41 +36,64 @@ Source: "..\dist\secret.exe"; DestDir: "{app}"; Flags: ignoreversion
 Name: "{group}\Secret manager console"; Filename: "{app}\secret.exe"
 Name: "{group}\Uninstall Secret manager CLI"; Filename: "{uninstallexe}"
 
-[Registry]
-Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Check: NeedsAddPath(ExpandConstant('{app}'))
-
 [Code]
-{ True when the folder is not yet on the user's PATH (case-insensitive). }
-function NeedsAddPath(Param: string): boolean;
-var
-  OrigPath: string;
+const
+  EnvironmentKey = 'Environment';
+
+{ The user's PATH as a list without empty entries, so a trailing ';' left
+  by other installers never turns into ';;'. }
+function ReadUserPath: string;
 begin
-  if not RegQueryStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', OrigPath) then
-  begin
-    Result := True;
-    exit;
-  end;
-  Result := Pos(';' + Lowercase(Param) + ';', ';' + Lowercase(OrigPath) + ';') = 0;
+  if not RegQueryStringValue(HKEY_CURRENT_USER, EnvironmentKey, 'Path', Result) then
+    Result := '';
 end;
 
-{ Removes the folder from the user's PATH again when uninstalling. }
+function ContainsFolder(PathValue, Folder: string): boolean;
+begin
+  Result := Pos(';' + Lowercase(Folder) + ';', ';' + Lowercase(PathValue) + ';') > 0;
+end;
+
+function TrimSeparators(Value: string): string;
+begin
+  Result := Value;
+  while (Length(Result) > 0) and (Result[1] = ';') do
+    Delete(Result, 1, 1);
+  while (Length(Result) > 0) and (Result[Length(Result)] = ';') do
+    Delete(Result, Length(Result), 1);
+end;
+
+procedure AddToPath(Folder: string);
+var
+  Current: string;
+begin
+  Current := TrimSeparators(ReadUserPath);
+  if ContainsFolder(Current, Folder) then
+    exit;
+  if Current = '' then
+    Current := Folder
+  else
+    Current := Current + ';' + Folder;
+  RegWriteExpandStringValue(HKEY_CURRENT_USER, EnvironmentKey, 'Path', Current);
+end;
+
 procedure RemoveFromPath(Folder: string);
 var
-  OrigPath, Lowered: string;
+  Current: string;
   P: Integer;
 begin
-  if not RegQueryStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', OrigPath) then
-    exit;
-  Lowered := ';' + Lowercase(OrigPath) + ';';
-  P := Pos(';' + Lowercase(Folder) + ';', Lowered);
+  Current := ReadUserPath;
+  P := Pos(';' + Lowercase(Folder) + ';', ';' + Lowercase(Current) + ';');
   if P = 0 then
     exit;
-  Delete(OrigPath, P, Length(Folder) + 1);
-  if (Length(OrigPath) > 0) and (OrigPath[1] = ';') then
-    Delete(OrigPath, 1, 1);
-  if (Length(OrigPath) > 0) and (OrigPath[Length(OrigPath)] = ';') then
-    Delete(OrigPath, Length(OrigPath), 1);
-  RegWriteExpandStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', OrigPath);
+  { P counts the ';' that was prepended; delete the entry and one separator. }
+  Delete(Current, P, Length(Folder) + 1);
+  RegWriteExpandStringValue(HKEY_CURRENT_USER, EnvironmentKey, 'Path', TrimSeparators(Current));
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    AddToPath(ExpandConstant('{app}'));
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
