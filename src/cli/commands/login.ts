@@ -7,11 +7,15 @@ const EXPIRED = 'The login request expired, was denied, or the code was wrong. R
 const OPEN_HINT = 'Open this link if the browser did not open by itself:';
 const WAIT_HINT = 'Waiting for the browser to come back. If it does not, type the code shown on the page.';
 
-const askServerUrl = async (context: CommandContext): Promise<string | undefined> => {
-  const stored = (await context.config.read()).serverUrl ?? context.defaultServerUrl;
-  const hint = stored === undefined ? '' : ` [${stored}]`;
-  const typed = await context.io.ask(`Server URL${hint}: `);
-  return typed === undefined ? undefined : typed.trim() || stored;
+/* Argument → stored → built-in default; the prompt is the last resort for a
+   build without a baked-in server. */
+const resolveServerUrl = async (context: CommandContext, argument: string | undefined): Promise<string | undefined> => {
+  const known = argument ?? (await context.config.read()).serverUrl ?? context.defaultServerUrl;
+  if (known !== undefined && known !== '') {
+    return known;
+  }
+  const typed = await context.io.ask('Server URL: ');
+  return typed === undefined ? undefined : typed.trim();
 };
 
 const never = (): Promise<string> => new Promise<string>(() => undefined);
@@ -43,15 +47,15 @@ const waitForGrant = async (context: CommandContext, callback: Promise<string>, 
 
 export const login: Command = {
   name: 'login',
-  usage: 'login',
+  usage: 'login [server-url]',
   description: 'Link this device to your account through the web site',
-  run: async (context): Promise<Outcome> => {
-    const serverUrl = await askServerUrl(context);
+  run: async (context, [argument]): Promise<Outcome> => {
+    const serverUrl = await resolveServerUrl(context, argument);
     if (serverUrl === undefined) {
       return ABORTED;
     }
     if (serverUrl === '') {
-      return failed('A server URL is required.', EXIT.usage);
+      return failed('A server URL is required: login <server-url>', EXIT.usage);
     }
     const device = context.createDeviceClient(serverUrl);
     const listener = context.listen();

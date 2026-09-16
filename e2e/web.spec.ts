@@ -15,7 +15,7 @@ const UI = {
   devices: { addDevice: 'Add a device', addHere: 'Add a passkey here', passkeyName: 'Passkey name', enrollHere: 'Add passkey on this device' },
 } as const;
 
-type Authenticator = { readonly replace: () => Promise<void> };
+type Authenticator = { readonly replace: () => Promise<void>; readonly remove: () => Promise<void> };
 
 const OPTIONS = {
   protocol: 'ctap2',
@@ -40,6 +40,7 @@ const addAuthenticator = async (page: Page): Promise<Authenticator> => {
       await cdp.send('WebAuthn.removeVirtualAuthenticator', { authenticatorId: current });
       current = await add();
     },
+    remove: () => cdp.send('WebAuthn.removeVirtualAuthenticator', { authenticatorId: current }),
   };
 };
 
@@ -162,9 +163,11 @@ test.describe('device login (device-login)', () => {
     const started = await request.post('/api/device/start', { data: { label: 'laptop', callback: listener.callback } });
     const { url, deviceSecret } = await started.json();
 
-    await signUp(page);
+    const { authenticator } = await signUp(page);
+    /* Already signed in: no passkey is needed, so no authenticator either. */
+    await authenticator.remove();
     await page.goto(url);
-    /* No button pressed: the ceremony ran on load and the page moved on. */
+    /* No button pressed: the page approved on load and moved on to the device. */
     await expect(page.getByRole('heading', { name: 'Device linked' })).toBeVisible();
     const grant = await listener.grant;
     expect(grant).toMatch(/^[a-z0-9]{4}-[a-z0-9]{4}$/);
@@ -182,9 +185,10 @@ test.describe('device login (device-login)', () => {
     await expect(page.locator('pre')).toHaveText(grant);
   });
 
-  test('without a callback the code on the page is the way back (AC-3.2)', async ({ page, request }) => {
+  test('without a session the link asks for the passkey; without a callback the code on the page is the way back (AC-3.1, AC-3.2)', async ({ page, request }) => {
     const { url, deviceSecret } = await (await request.post('/api/device/start', { data: { label: 'laptop' } })).json();
     await signUp(page);
+    await page.getByRole('button', { name: UI.logout }).click();
     await page.goto(url);
     await expect(page.getByText('Approved: “laptop” can use your account.')).toBeVisible();
     const grant = (await page.locator('pre').textContent()) ?? '';
