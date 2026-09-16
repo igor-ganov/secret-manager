@@ -39,17 +39,22 @@ jobs:
         run: bun run build:installer
       - name: Smoke-test the portable executable
         run: ./dist/secret.exe help
+      - name: Write the release notes
+        shell: bash
+        env:
+          SERVER_URL: ${{ vars.SECRET_MANAGER_URL }}
+        run: |
+          {
+            echo "Windows console utility for ${SERVER_URL}."
+            echo
+            echo '**secret-setup.exe** — installer: puts `secret` on your PATH (per user, no admin needed), adds a Start menu entry and an uninstaller. Open a new terminal afterwards and run `secret login`.'
+            echo
+            echo '**secret.exe** — portable build, the same program without installation.'
+            echo
+            echo 'See documentation/user/cli.md.'
+          } > dist/notes.md
       - name: Publish the release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "${GITHUB_REF_NAME}" dist/secret-setup.exe dist/secret.exe \
-            --title "secret ${GITHUB_REF_NAME}" \
-            --notes "Windows console utility for ${{ vars.SECRET_MANAGER_URL }}.
-
-**secret-setup.exe** — installer: puts \`secret\` on your PATH (per user, no admin needed), adds a Start menu entry and an uninstaller. Open a new terminal afterwards and run \`secret login\`.
-
-**secret.exe** — portable build, the same program without installation.
-
-See documentation/user/cli.md."
+        run: gh release create "${GITHUB_REF_NAME}" dist/secret-setup.exe dist/secret.exe --title "secret ${GITHUB_REF_NAME}" --notes-file dist/notes.md
