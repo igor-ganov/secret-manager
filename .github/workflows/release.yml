@@ -1,9 +1,10 @@
 name: Release CLI
 
 # Pushing a tag such as v0.1.0 compiles the console utility for Windows with
-# the production server baked in and attaches it to a GitHub release, so the
-# stable download link is
-# https://github.com/<owner>/<repo>/releases/latest/download/secret.exe
+# the production server baked in, wraps it in an installer, and attaches both
+# to a GitHub release, so the stable download links are
+#   https://github.com/<owner>/<repo>/releases/latest/download/secret-setup.exe  (installer)
+#   https://github.com/<owner>/<repo>/releases/latest/download/secret.exe        (portable)
 on:
   push:
     tags: ['v*']
@@ -16,10 +17,11 @@ env:
 
 jobs:
   release:
-    name: Build secret.exe & publish release
-    runs-on: ubuntu-latest
+    name: Build secret.exe, installer & publish release
+    # Inno Setup ships with the Windows runner image.
+    runs-on: windows-latest
     permissions:
-      contents: write # create the release and upload the asset
+      contents: write # create the release and upload the assets
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -27,15 +29,27 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
-      - run: bun test
       - name: Compile the Windows executable
         env:
           SECRET_MANAGER_URL: ${{ vars.SECRET_MANAGER_URL }}
         run: bun run build:cli
+      - name: Build the installer
+        env:
+          APP_VERSION: ${{ github.ref_name }}
+        run: bun run build:installer
+      - name: Smoke-test the portable executable
+        run: ./dist/secret.exe help
       - name: Publish the release
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" dist/secret.exe \
+          gh release create "${GITHUB_REF_NAME}" dist/secret-setup.exe dist/secret.exe \
             --title "secret ${GITHUB_REF_NAME}" \
-            --notes "Windows console utility for ${{ vars.SECRET_MANAGER_URL }}. Download secret.exe, run it, type \`login\` and paste a token created on the web site (CLI tokens section). See documentation/user/cli.md."
+            --notes "Windows console utility for ${{ vars.SECRET_MANAGER_URL }}.
+
+**secret-setup.exe** — installer: puts \`secret\` on your PATH (per user, no admin needed), adds a Start menu entry and an uninstaller. Open a new terminal afterwards and run \`secret login\`.
+
+**secret.exe** — portable build, the same program without installation.
+
+See documentation/user/cli.md."

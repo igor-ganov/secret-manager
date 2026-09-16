@@ -1,8 +1,23 @@
-# Console utility (`secret.exe`)
+# Console utility (`secret`)
 
-A single Windows executable that acts for your account on the same server as the
-web site and the bot. It never asks for a password or a token: it asks the account
-owner — you — to approve it on the web site.
+A Windows program that acts for your account on the same server as the web site
+and the bot. It never asks for a password or a token: it asks the account owner —
+you — to approve it on the web site.
+
+## Install
+
+- **Installer** — download and run
+  [secret-setup.exe](https://github.com/igor-ganov/secret-manager/releases/latest/download/secret-setup.exe).
+  It installs for the current user (no administrator prompt) into
+  `%LOCALAPPDATA%\Programs\secret-manager`, adds that folder to your PATH and creates
+  a Start menu entry plus an uninstaller (*Settings → Apps → Secret manager CLI*).
+  Open a **new** terminal afterwards: `secret` works from any folder.
+- **Portable** — download
+  [secret.exe](https://github.com/igor-ganov/secret-manager/releases/latest/download/secret.exe)
+  and run it from wherever you put it. Same program, nothing is registered.
+
+Windows SmartScreen may warn about an unsigned program the first time; choose
+*More info → Run anyway*.
 
 ## Why an interactive mode
 
@@ -87,6 +102,7 @@ rejected or approval expired, `64` usage error.
 ```sh
 bun run build:cli                                        # → dist/secret.exe
 SECRET_MANAGER_URL=https://<server> bun run build:cli    # bake in the server URL
+bun run build:installer                                  # → dist/secret-setup.exe (Inno Setup 6)
 ```
 
 `SECRET_MANAGER_URL` (environment) and `SECRET_MANAGER_CONFIG` (config file path)
