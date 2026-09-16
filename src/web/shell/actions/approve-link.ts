@@ -1,5 +1,6 @@
-import type { LoginRequestInfoResponse } from '../../../features/http-api/api-types.ts';
+import type { LoginRequestInfoResponse, MeResponse } from '../../../features/http-api/api-types.ts';
 import { matchResult } from '../../../features/result/match-result.ts';
+import type { Result } from '../../../features/result/result.ts';
 import { getCredential } from '../../auth/get-credential.ts';
 import { runCeremony } from '../../auth/run-ceremony.ts';
 import type { ActionDeps } from '../action-deps.ts';
@@ -23,8 +24,8 @@ const showRequest = async (deps: ActionDeps, code: string, returnToDevice: boole
     (error) => deps.store.patch({ linkInfo: undefined, error }),
   );
 
-/* A pending request is approved right after the passkey ceremony; one that
-   was already answered just shows its outcome (the fallback code again). */
+/* A pending request is approved at once; one that was already answered just
+   shows its outcome (the fallback code again). */
 const approve = async (deps: ActionDeps, code: string): Promise<void> =>
   matchResult(
     await deps.api.approveDevice(code),
@@ -32,14 +33,20 @@ const approve = async (deps: ActionDeps, code: string): Promise<void> =>
     () => showRequest(deps, code, false),
   );
 
-/* The link page: passkey first (approving re-authenticates, whatever the
-   session state), then approval, then back to the device. */
+/* An existing session is enough; the passkey is asked only without one. */
+const signIn = async ({ api }: ActionDeps): Promise<Result<MeResponse>> =>
+  matchResult(
+    await api.me(),
+    async (user) => ({ ok: true, value: user }),
+    () => runCeremony(api.loginOptions, getCredential, api.loginVerify),
+  );
+
 export const approveLink =
   (deps: ActionDeps) =>
   async (code: string): Promise<void> => {
-    const { api, store } = deps;
+    const { store } = deps;
     await matchResult(
-      await runCeremony(api.loginOptions, getCredential, api.loginVerify),
+      await signIn(deps),
       async (user) => {
         await loadWorkspace(deps)(user);
         await approve(deps, code);

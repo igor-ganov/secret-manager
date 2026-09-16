@@ -61,7 +61,7 @@ describe('secret CLI over a pipe', () => {
   test('login links the device through the site and the session then works', async () => {
     const proc = Bun.spawn(['bun', 'run', 'src/cli/main.ts'], {
       cwd: process.cwd(),
-      stdin: new TextEncoder().encode(`login\n${server.url.origin}\nwhoami\nset api-key\npiped-secret\nlist\nget api-key\nexit\n`),
+      stdin: new TextEncoder().encode(`login ${server.url.origin}\nwhoami\nset api-key\npiped-secret\nlist\nget api-key\nexit\n`),
       stdout: 'pipe',
       stderr: 'pipe',
       /* Keeps the test from launching a real browser. */

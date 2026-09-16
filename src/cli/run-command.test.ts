@@ -25,6 +25,8 @@ type Harness = {
 
 type HarnessOptions = {
   readonly config?: CliConfig;
+  /* Simulates a build without a baked-in server url. */
+  readonly withoutDefaultServer?: boolean;
   /* Grant the browser brings to the callback; undefined = it never comes. */
   readonly callbackGrant?: string;
   /* Milliseconds until the login request expires. */
@@ -33,7 +35,7 @@ type HarnessOptions = {
 
 const build = (
   answers: readonly string[],
-  { config = { serverUrl: 'https://s', token: 't' }, callbackGrant, ttlMs = 60_000 }: HarnessOptions = {},
+  { config = { serverUrl: 'https://s', token: 't' }, withoutDefaultServer = false, callbackGrant, ttlMs = 60_000 }: HarnessOptions = {},
 ): Harness => {
   const queue = [...answers];
   const out: string[] = [];
@@ -103,7 +105,7 @@ const build = (
     createClient: fakeClient,
     createDeviceClient: fakeDeviceClient,
     readStdin: async () => 'from-stdin\n',
-    defaultServerUrl: 'https://default',
+    defaultServerUrl: withoutDefaultServer ? undefined : 'https://default',
     deviceLabel: 'Console on box',
     listen: () => ({
       callbackUrl: 'http://127.0.0.1:5/callback',
@@ -181,8 +183,8 @@ describe('runCommand', () => {
     expect(await runCommand(context, [])).toBe(64);
   });
 
-  test('login opens the link and completes when the browser calls back (device-login AC-2.1, AC-2.2)', async () => {
-    const { context, out, calls, configFile } = build([''], { config: {}, callbackGrant: 'good-code' });
+  test('login asks nothing, opens the link and completes when the browser calls back (device-login AC-2.1, AC-2.2)', async () => {
+    const { context, out, calls, configFile } = build([], { config: {}, callbackGrant: 'good-code' });
     expect(await runCommand(context, ['login'])).toBe(0);
     expect(calls).toEqual([
       'start:https://default:Console on box:http://127.0.0.1:5/callback',
@@ -196,18 +198,25 @@ describe('runCommand', () => {
   });
 
   test('login accepts the typed fallback code when the browser never comes back', async () => {
-    const { context, calls, configFile } = build(['https://srv', 'good-code'], { config: {} });
-    expect(await runCommand(context, ['login'])).toBe(0);
+    const { context, calls, configFile } = build(['good-code'], { config: {} });
+    expect(await runCommand(context, ['login', 'https://srv'])).toBe(0);
+    expect(calls[0]).toBe('start:https://srv:Console on box:http://127.0.0.1:5/callback');
     expect(calls).toContain('claim:secret:good-code');
     expect(configFile.value).toEqual({ serverUrl: 'https://srv', token: 'fresh-token' });
   });
 
+  test('login prompts for the server only when no url is known at all', async () => {
+    const { context, calls } = build(['https://typed', 'good-code'], { config: {}, withoutDefaultServer: true });
+    expect(await runCommand(context, ['login'])).toBe(0);
+    expect(calls[0]).toBe('start:https://typed:Console on box:http://127.0.0.1:5/callback');
+  });
+
   test('login exits 2 on a wrong code or when the request expires (AC-2.3)', async () => {
-    const wrong = build(['https://srv', 'bad-code'], { config: {} });
+    const wrong = build(['bad-code'], { config: {} });
     expect(await runCommand(wrong.context, ['login'])).toBe(2);
     expect(wrong.configFile.value).toEqual({});
     expect(wrong.err[0]).toContain('expired');
-    const expired = build(['https://srv'], { config: {}, ttlMs: 0 });
+    const expired = build([], { config: {}, ttlMs: 0 });
     expect(await runCommand(expired.context, ['login'])).toBe(2);
     expect(expired.calls.some((call) => call.startsWith('claim'))).toBe(false);
   });
