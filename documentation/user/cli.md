@@ -38,7 +38,10 @@ secret> exit
 ```
 
 Values entered at the hidden prompt never appear on screen or in any history.
-Ctrl+C during a hidden prompt aborts without printing what was typed.
+Ctrl+C during a hidden prompt aborts without printing what was typed. If you type
+the value inline anyway (`set db-password hunter2`), the line is overwritten with
+`set db-password ••••` the moment you press Enter and is not recalled by the arrow
+keys.
 
 ## First run: link the device
 

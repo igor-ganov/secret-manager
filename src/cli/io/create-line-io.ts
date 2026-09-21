@@ -47,5 +47,7 @@ export const createLineIo = ({ nextLine, stdout, stderr }: LineStreams): Console
     },
     ask,
     askHidden: () => takeLine(),
+    /* Nothing was echoed, so there is nothing to overwrite. */
+    replaceLastLine: () => undefined,
   };
 };

@@ -26,6 +26,10 @@ Depends on [http-api](../http-api/requirements.md).
   the same prompts as plain lines so it stays scriptable and testable.
 - AC-1.5 WHEN Ctrl+C is pressed during hidden input, THE SYSTEM SHALL abort the
   current command without printing the partial value.
+- AC-1.6 WHEN a session line carries a secret inline (`share <value>`,
+  `set <key> <value>`), THE SYSTEM SHALL overwrite that line on screen with a
+  masked form the moment it is submitted and SHALL never offer it through the
+  arrow-key history; hidden input is never echoed in the first place.
 
 ### US-2 Login and configuration
 
