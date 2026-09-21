@@ -18,6 +18,8 @@ type Harness = {
   readonly context: CommandContext;
   readonly out: string[];
   readonly err: string[];
+  readonly replaced: string[];
+  readonly histories: (readonly string[])[];
   readonly hiddenPrompts: string[];
   readonly calls: string[];
   readonly configFile: { value: CliConfig };
@@ -42,12 +44,16 @@ const build = (
   const err: string[] = [];
   const hiddenPrompts: string[] = [];
   const calls: string[] = [];
+  const replaced: string[] = [];
+  const histories: (readonly string[])[] = [];
   const configFile = { value: config };
   const io: ConsoleIo = {
     interactive: true,
     print: (text) => out.push(text),
     printError: (text) => err.push(text),
-    ask: async (_prompt, signal) => {
+    replaceLastLine: (text) => replaced.push(text),
+    ask: async (_prompt, signal, history = []) => {
+      histories.push(history);
       const answer = queue.shift();
       /* Like the terminal: an empty queue waits until the prompt is withdrawn. */
       return answer !== undefined || signal === undefined
@@ -118,7 +124,7 @@ const build = (
     },
     now: () => 1000,
   };
-  return { context, out, err, hiddenPrompts, calls, configFile };
+  return { context, out, err, hiddenPrompts, calls, configFile, replaced, histories };
 };
 
 describe('runCommand', () => {
@@ -231,6 +237,19 @@ describe('runCommand', () => {
 
 describe('runSession (AC-1.1, AC-1.2)', () => {
   test('runs commands line by line until exit, surviving errors', async () => {
+    const { context } = build(['list', 'bogus', 'set k "two words"', 'exit', 'list']);
+    expect(await runSession(context)).toBe(0);
+  });
+
+  test('a secret typed inline is wiped from the screen and kept out of the history (AC-1.6)', async () => {
+    const { context, replaced, histories } = build(['list', 'set k "two words"', 'share s3cret', 'get k', 'exit']);
+    expect(await runSession(context)).toBe(0);
+    expect(replaced).toEqual(['secret> set k ••••', 'secret> share ••••']);
+    /* History offered at each prompt: newest first, never a secret line. */
+    expect(histories).toEqual([[], ['list'], ['list'], ['list'], ['get k', 'list']]);
+  });
+
+  test('session output stays the same with redaction in place', async () => {
     const { context, out, err } = build(['list', 'bogus', 'set k "two words"', 'exit', 'list']);
     expect(await runSession(context)).toBe(0);
     expect(out).toEqual(['Interactive session. Type help for commands, exit to leave.', 'a', 'b', 'Saved “k”.', LINK.url, LINK.curl, 'Valid for 5 minutes, opens once.']);
