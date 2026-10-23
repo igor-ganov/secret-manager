@@ -5,6 +5,7 @@ import { link } from './link.ts';
 import { list } from './list.ts';
 import { login } from './login.ts';
 import { logout } from './logout.ts';
+import { mcp } from './mcp.ts';
 import { rm } from './rm.ts';
 import { set } from './set.ts';
 import { share } from './share.ts';
@@ -13,7 +14,7 @@ import { whoami } from './whoami.ts';
 
 const help = createHelp(() => COMMANDS);
 
-export const COMMANDS: readonly Command[] = [share, set, get, link, list, rm, ttl, login, logout, whoami, help];
+export const COMMANDS: readonly Command[] = [share, set, get, link, list, rm, ttl, login, logout, whoami, mcp, help];
 
 export const findCommand = (name: string): Command | undefined =>
   COMMANDS.find((command) => command.name === name);

@@ -57,7 +57,7 @@ export const login: Command = {
     if (serverUrl === '') {
       return failed('A server URL is required: login <server-url>', EXIT.usage);
     }
-    const device = context.createDeviceClient(serverUrl);
+    const device = context.createPublicClient(serverUrl);
     const listener = context.listen();
     try {
       return await toOutcome(await device.start(context.deviceLabel, listener.callbackUrl), async ({ url, deviceSecret, expiresAt }) => {

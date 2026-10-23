@@ -8,7 +8,7 @@ import { decodeSettings } from '../../features/http-api/decoders/decode-settings
 import { decodeValue } from '../../features/http-api/decoders/decode-value.ts';
 import type { Decoder } from '../../features/http-api/decoders/decoder.ts';
 import { readErrorMessage } from '../../features/http-api/read-error-message.ts';
-import type { ApiClient, ApiCredentials, ApiResult, DeviceClient } from './api-client.ts';
+import type { ApiClient, ApiCredentials, ApiResult, PublicClient } from './api-client.ts';
 
 export type FetchFn = (input: string, init: RequestInit) => Promise<Response>;
 
@@ -83,13 +83,14 @@ export const createApiClient =
     };
   };
 
-export const createDeviceClient =
+export const createPublicClient =
   (fetchFn: FetchFn) =>
-  (serverUrl: string): DeviceClient => {
+  (serverUrl: string): PublicClient => {
     const call = createCaller(fetchFn, serverUrl, {});
     return {
       start: (label, callback) => call('POST', '/api/device/start', decodeDeviceStart, { label, callback }),
       claim: (deviceSecret, grant) =>
         call('POST', '/api/device/claim', decodeDeviceClaim, { grant }, { 'x-device-secret': deviceSecret }),
+      drop: (value, ttlMinutes) => call('POST', '/api/drops', decodeIssuedLink, { value, ttlMinutes }),
     };
   };

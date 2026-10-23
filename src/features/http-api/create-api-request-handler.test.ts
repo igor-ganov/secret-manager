@@ -244,6 +244,58 @@ describe('authentication and CSRF', () => {
   });
 });
 
+describe('drops (mcp AC-1.x)', () => {
+  const drop = (call: ReturnType<typeof build>['call'], body: unknown, headers: Readonly<Record<string, string>> = {}) =>
+    call('/api/drops', { method: 'POST', body, headers });
+
+  test('anyone turns a value into a one-time link with its own lifetime (AC-1.1, AC-1.2)', async () => {
+    const { call } = build();
+    const response = await drop(call, { value: 'generated-password', ttlMinutes: 90 });
+    expect(response.status).toBe(201);
+    const link = await response.json();
+    expect(link).toEqual({ url: expect.stringMatching(/^https:\/\/app\.test\/s\/[0-9a-f]{64}$/), curl: `curl -X POST ${link.url}`, ttlMinutes: 90 });
+    const opened = await call(new URL(link.url).pathname, { method: 'POST' });
+    expect(await opened.text()).toBe('generated-password\n');
+    expect((await call(new URL(link.url).pathname, { method: 'POST' })).status).toBe(410);
+  });
+
+  test('rejects a missing, empty or oversized value and a lifetime outside 1–1440 whole minutes (AC-1.3, AC-1.4)', async () => {
+    const { call } = build();
+    const statuses = await Promise.all(
+      [
+        { ttlMinutes: 5 },
+        { value: '', ttlMinutes: 5 },
+        { value: 'x'.repeat(16 * 1024 + 1), ttlMinutes: 5 },
+        { value: 'v' },
+        { value: 'v', ttlMinutes: 0 },
+        { value: 'v', ttlMinutes: 1441 },
+        { value: 'v', ttlMinutes: 2.5 },
+        { value: 'v', ttlMinutes: '5' },
+      ].map((body) => drop(call, body)),
+    );
+    expect(statuses.map((response) => response.status)).toEqual([400, 400, 400, 400, 400, 400, 400, 400]);
+    expect((await drop(call, { value: 'x'.repeat(16 * 1024), ttlMinutes: 1440 })).status).toBe(201);
+  });
+
+  test('is rate limited per client address (AC-1.5)', async () => {
+    const { call } = build();
+    const responses = await Promise.all(
+      Array.from({ length: 31 }, () => drop(call, { value: 'v', ttlMinutes: 1 }, { 'cf-connecting-ip': '10.0.0.9' })),
+    );
+    expect(responses.map((response) => response.status).filter((status) => status === 429)).toHaveLength(1);
+    expect((await drop(call, { value: 'v', ttlMinutes: 1 }, { 'cf-connecting-ip': '10.0.0.10' })).status).toBe(201);
+  });
+
+  test('signed-in callers may drop too, but a cross-site cookie call is refused (AC-1.6)', async () => {
+    const { asBearer, signUp } = build();
+    const bearer = await asBearer(2 ** 40 + 11);
+    expect((await bearer('/api/drops', { method: 'POST', body: { value: 'v', ttlMinutes: 1 } })).status).toBe(201);
+    const { as } = await signUp();
+    expect((await as('/api/drops', { method: 'POST', body: { value: 'v', ttlMinutes: 1 } })).status).toBe(201);
+    expect((await as('/api/drops', { method: 'POST', body: { value: 'v', ttlMinutes: 1 }, headers: { origin: 'https://evil.test' } })).status).toBe(403);
+  });
+});
+
 describe('secrets, links and settings', () => {
   test('sharing, saving, linking, deleting and settings work for the account (http-api AC-4.x, AC-5.x)', async () => {
     const { asBearer } = build();

@@ -19,7 +19,8 @@ Another browser or phone joins through a one-time link or QR code from the
 **Devices** section (or `/device` in the bot). A recovery code, shown once at
 signup, replaces every lost device.
 
-User guides: [web](documentation/user/web.md) · [CLI](documentation/user/cli.md).
+User guides: [web](documentation/user/web.md) · [CLI](documentation/user/cli.md) ·
+[MCP server for AI assistants](documentation/user/mcp.md).
 
 ## How to use
 
@@ -130,9 +131,24 @@ bun run cli -- list                                      # run from source
 
 See [documentation/user/cli.md](documentation/user/cli.md).
 
+## MCP server for AI assistants
+
+`secret mcp` turns the same executable into a [Model Context Protocol](https://modelcontextprotocol.io)
+server over stdio with one tool, `create_one_time_link` (`value`, `ttlMinutes`):
+an assistant that has to hand you a credential posts a one-time link instead of
+the value. It needs no login — the link is an anonymous *drop* through
+`POST /api/drops` — and the tool's description tells the assistant never to
+repeat the value in the chat.
+
+```sh
+claude mcp add --scope user secret-links -- secret mcp     # Claude Code, every project
+```
+
+See [documentation/user/mcp.md](documentation/user/mcp.md).
+
 ## HTTP API
 
-All routes live under `/api/`, answer JSON, and (except the ceremonies) require
+All routes live under `/api/`, answer JSON, and (except the ceremonies and drops) require
 either the `session` cookie or `Authorization: Bearer <token>`. Cookie-based
 mutations must carry a same-origin `Origin` header; ceremony and code endpoints
 are rate-limited per client address.
@@ -148,6 +164,7 @@ are rate-limited per client address.
 | POST   | `/api/auth/logout`       | revoke the session                                 |
 | GET    | `/api/me`                | `{ id, name }`                                     |
 | POST   | `/api/links`             | `{ value, key? }` → `{ url, curl, ttlMinutes }`    |
+| POST   | `/api/drops`             | public, rate-limited: `{ value, ttlMinutes }` → same shape, saved nowhere (MCP) |
 | GET    | `/api/secrets`           | `{ keys }`                                         |
 | GET/PUT/DELETE | `/api/secrets/:key` | read `{ value }`, overwrite `{ value }`, delete |
 | POST   | `/api/secrets/:key/link` | fresh one-time link to the stored value            |
@@ -188,7 +205,7 @@ src/
     app/                  # request routing shared by both runtimes
     bot/                  # grammY input port
   web/                    # site client: api → state → view (pure) → shell
-  cli/                    # console utility: io → config → api → commands
+  cli/                    # console utility: io → config → api → commands; mcp/ = the MCP server mode
 ```
 
 Notes:

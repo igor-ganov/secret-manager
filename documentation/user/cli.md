@@ -82,6 +82,7 @@ Inside the session or as arguments (`secret <command> …`):
 | `ttl [minutes]`       | Show or set link lifetime (1, 5, 15, 30, 60, 1440)            |
 | `login` / `logout`    | Link / unlink this device                                     |
 | `whoami`              | Which account the device acts for                             |
+| `mcp [server-url]`    | MCP server for AI assistants over stdio, see [mcp.md](mcp.md) |
 | `help`, `exit`        |                                                               |
 
 When `[value]` is omitted it is asked for hidden. When it is `-` it is read from
