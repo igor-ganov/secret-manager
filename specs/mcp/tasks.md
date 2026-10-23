@@ -7,4 +7,4 @@
 - [x] T5 `cli/mcp/serve-mcp.ts`, `run-mcp.ts`, `commands/mcp.ts`, `main.ts` dispatch; session test. (AC-2.1, 2.5, 2.6)
 - [x] T6 Integration test: spawned `secret mcp` over stdio against the local API. (AC-2.1, 2.3)
 - [x] T7 README (API row, MCP section), `documentation/user/mcp.md`, `cli.md` row. (AC-3.1)
-- [ ] T8 Release `v0.5.0`, install, `claude mcp add`, verify a real link. (AC-3.2)
+- [x] T8 Release `v0.5.0`, install, `claude mcp add`, verify a real link. (AC-3.2)
