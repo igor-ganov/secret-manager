@@ -14,6 +14,8 @@ export type Actions = {
   readonly revokeToken: (id: string) => Promise<void>;
   readonly logout: () => Promise<void>;
   readonly share: (key: string, value: string) => Promise<void>;
+  /* The quick start: an anonymous one-time link with the chosen lifetime. */
+  readonly drop: (value: string, ttlMinutes: number) => Promise<void>;
   readonly linkFor: (key: string) => Promise<void>;
   readonly setRowMode: (key: string, mode: RowMode) => void;
   readonly saveValue: (key: string, value: string) => Promise<void>;

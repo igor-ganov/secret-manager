@@ -31,7 +31,9 @@ account.
 
 ### US-2 Sign in
 
-- AC-2.1 THE SYSTEM SHALL offer a single entry point, "Continue with passkey":
+- AC-2.1 THE SYSTEM SHALL offer a single sign-in entry point, "Continue with passkey"
+  (since [web-quick-start](../web-quick-start/requirements.md) it sits inside the
+  collapsed, opt-in account section under the quick start):
   WHEN the authentication ceremony completes with a stored credential, THE SYSTEM
   SHALL set a session and show the workspace; WHEN it ends without a login, THE
   SYSTEM SHALL start the registration ceremony at once (US-1) — the device's own

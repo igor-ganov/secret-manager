@@ -5,6 +5,8 @@ import type { AddressInfo } from 'node:net';
 /* Locator contract with src/web (labels and headings are the UI's public API). */
 const UI = {
   continue: 'Continue with passkey',
+  account: 'Account (optional)',
+  quick: { secret: 'Secret', lifetime: 'Link lifetime', submit: 'Get one-time link' },
   recoveryHeading: 'Lost every device?',
   recoveryCode: 'Recovery code',
   recover: 'Recover with code',
@@ -52,6 +54,8 @@ const NAME = 'My account';
 const signUp = async (page: Page): Promise<{ code: string; authenticator: Authenticator }> => {
   const authenticator = await addAuthenticator(page);
   await page.goto('/');
+  /* The account is opt-in: the passkey button sits in a collapsed section. */
+  await page.getByText(UI.account).click();
   await page.getByRole('button', { name: UI.continue }).click();
   await expect(page.getByRole('status')).toContainText('Your recovery code');
   const code = (await page.getByRole('status').locator('pre').textContent()) ?? '';
@@ -70,18 +74,23 @@ test.describe('accounts (passkey-accounts)', () => {
     const { code } = await signUp(page);
     expect(code).toMatch(/^([a-z0-9]{4}-){6}[a-z0-9]{4}$/);
     await page.getByRole('button', { name: UI.logout }).click();
-    await expect(page.getByRole('button', { name: UI.continue })).toBeVisible();
+    /* Logging out lands on the quick start; the account section is collapsed again. */
+    await expect(page.getByLabel(UI.quick.secret, { exact: true })).toBeVisible();
+    await page.getByText(UI.account).click();
     await page.getByRole('button', { name: UI.continue }).click();
     await expect(page.getByText(NAME, { exact: true })).toBeVisible();
     /* The live region is hidden while empty, so the code is gone for good. */
     await expect(page.locator('[role="status"]')).not.toContainText('recovery code');
   });
 
-  test('a signed-out visitor sees one entry point (AC-2.1)', async ({ page }) => {
+  test('a signed-out visitor sees one sign-in entry point, behind the opt-in account section (AC-2.1, web-quick-start AC-2.1–2.2)', async ({ page }) => {
     await page.goto('/');
+    await expect(page.getByRole('button', { name: UI.continue })).toBeHidden();
+    await page.getByText(UI.account).click();
     await expect(page.getByRole('button', { name: UI.continue })).toBeVisible();
-    /* The recovery form is collapsed, so exactly one button is offered. */
-    await expect(page.getByRole('button')).toHaveCount(1);
+    /* The recovery form stays collapsed: one passkey button, nothing else to sign in with. */
+    await expect(page.getByRole('button', { name: UI.continue })).toHaveCount(1);
+    await expect(page.getByRole('button', { name: UI.recover })).toBeHidden();
     await expect(page.getByRole('heading', { name: UI.keys.heading })).toHaveCount(0);
   });
 
@@ -90,6 +99,7 @@ test.describe('accounts (passkey-accounts)', () => {
     await page.getByRole('button', { name: UI.logout }).click();
     /* Every device is lost: the old key is gone, a new one will be created. */
     await authenticator.replace();
+    await page.getByText(UI.account).click();
     await page.getByText(UI.recoveryHeading).click();
     await page.getByLabel(UI.recoveryCode).fill(code.toUpperCase());
     await page.getByRole('button', { name: UI.recover }).click();
@@ -251,6 +261,52 @@ test.describe('workspace (web-app)', () => {
     await page.keyboard.type('typed-secret');
     await page.keyboard.press('Tab');
     await expect(page.getByRole('button', { name: UI.share.submit })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('status')).toContainText('/s/');
+  });
+});
+
+const quickStart = async (page: Page, secret: string, lifetime: string): Promise<void> => {
+  await page.getByLabel(UI.quick.secret, { exact: true }).fill(secret);
+  await page.getByRole('radiogroup', { name: UI.quick.lifetime }).getByRole('radio', { name: lifetime, exact: true }).check();
+  await page.getByRole('button', { name: UI.quick.submit }).click();
+};
+
+test.describe('quick start (web-quick-start)', () => {
+  test('a visitor gets a link that opens once, with the chosen lifetime kept (AC-1.1–1.3, AC-1.5)', async ({ page, request }) => {
+    await page.goto('/');
+    await expect(page.getByLabel(UI.quick.secret, { exact: true })).toBeVisible();
+    const lifetime = page.getByRole('radiogroup', { name: UI.quick.lifetime });
+    await expect(lifetime.getByRole('radio', { name: '5 min', exact: true })).toBeChecked();
+    await quickStart(page, 'quick-secret', '15 min');
+    const result = page.getByRole('status');
+    await expect(result).toContainText('Valid for 15 minutes, opens once.');
+    await expect(page.getByLabel(UI.quick.secret, { exact: true })).toHaveValue('');
+    await expect(lifetime.getByRole('radio', { name: '15 min', exact: true })).toBeChecked();
+    const url = (await result.locator('pre').first().textContent()) ?? '';
+    expect(url).toContain('/s/');
+    const opened = await request.post(url);
+    expect(opened.status()).toBe(200);
+    expect(await opened.text()).toContain('quick-secret');
+    expect((await request.post(url)).status()).toBe(410);
+  });
+
+  test('a rejected drop shows the error and keeps the draft (AC-1.4)', async ({ page }) => {
+    await page.goto('/');
+    await page.route('**/api/drops', (route) => route.fulfill({ status: 400, json: { error: 'Value must be a non-empty string.' } }));
+    await quickStart(page, 'kept-draft', '1 min');
+    await expect(page.getByRole('alert')).toContainText('Value must be');
+    await expect(page.getByLabel(UI.quick.secret, { exact: true })).toHaveValue('kept-draft');
+  });
+
+  test('is operable with the keyboard alone (AC-3.1)', async ({ page }) => {
+    await page.goto('/');
+    await page.getByLabel(UI.quick.secret, { exact: true }).focus();
+    await page.keyboard.type('typed-secret');
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('radiogroup', { name: UI.quick.lifetime }).getByRole('radio', { name: '5 min', exact: true })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('button', { name: UI.quick.submit })).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page.getByRole('status')).toContainText('/s/');
   });

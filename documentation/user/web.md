@@ -1,13 +1,29 @@
 # Web site
 
-The site is where your account lives. You sign in with a **passkey** (Face ID,
-Windows Hello, a fingerprint, a security key — whatever your device offers). The
-Telegram bot and the console utility are **devices** that you approve from here;
-they never see a password or a key.
+Open the site, paste a secret, get a link that opens once. That is the whole
+front page; no sign-in, nothing stored. An **account** is optional: it adds
+saved keys, a lifetime setting, devices, the Telegram bot and the console
+utility, and it is secured by a **passkey** (Face ID, Windows Hello, a
+fingerprint, a security key — whatever your device offers).
 
-## Continue with passkey
+## Quick start
 
-There is one button. Press **Continue with passkey**:
+1. Paste the secret into **Secret**.
+2. Pick the **Link lifetime**: 1, 5, 15, 30, 60 minutes or 1 day (5 minutes by
+   default; your choice stays selected for the next secret).
+3. Press **Get one-time link**. You get the link, a ready-to-copy `curl` snippet
+   and the lifetime, each with a Copy button.
+
+The link opens exactly once: the recipient sees a confirmation page and presses
+*Reveal secret*; scripts run the `curl` snippet instead. The server keeps nothing
+once the link is opened or expired. If the server refuses the request (for
+example after too many links in a minute), the error is shown and your text stays
+in the field.
+
+## Account (optional)
+
+Expand **Account (optional)** under the quick start. There is one button. Press
+**Continue with passkey**:
 
 - If this device already holds a passkey for the site, you are signed in.
 - If not, your device asks you to create a passkey; confirming it creates the

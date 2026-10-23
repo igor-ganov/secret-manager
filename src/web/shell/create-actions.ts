@@ -17,6 +17,7 @@ import { saveValue } from './actions/save-value.ts';
 import { setRowMode } from './actions/set-row-mode.ts';
 import { setTtl } from './actions/set-ttl.ts';
 import { share } from './actions/share.ts';
+import { drop } from './actions/drop.ts';
 import { unlinkTelegram } from './actions/unlink-telegram.ts';
 import type { ShellActions } from './shell-actions.ts';
 
@@ -34,6 +35,7 @@ export const createActions = (deps: ActionDeps): ShellActions => ({
   revokeToken: revokeToken(deps),
   logout: logout(deps),
   share: share(deps),
+  drop: drop(deps),
   linkFor: linkFor(deps),
   setRowMode: setRowMode(deps),
   saveValue: saveValue(deps),

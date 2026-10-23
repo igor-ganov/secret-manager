@@ -34,6 +34,7 @@ const actions: Actions = {
   revokeToken: record('revokeToken'),
   logout: record('logout'),
   share: record('share'),
+  drop: record('drop'),
   linkFor: record('linkFor'),
   setRowMode: (key, mode) => {
     calls.push(`setRowMode:${key},${mode}`);
@@ -124,11 +125,18 @@ describe('renderLinkPage and renderNotice', () => {
 });
 
 describe('renderApp', () => {
-  test('renders the login card while anonymous, the enroll page on that route, and the workspace when signed in', () => {
-    const anonymous = container(renderApp(h, actions, { ...initialState, session: { kind: 'anonymous' } }));
-    expect(anonymous.textContent).toContain('Continue with passkey');
-    expect(anonymous.textContent).toContain('Lost every device?');
-    /* Exactly one entry point; recovery is a form, not a second button. */
+  test('renders the quick start with an opt-in account while anonymous, the enroll page on that route, and the workspace when signed in (web-quick-start AC-1.1, AC-2.1–2.2)', () => {
+    const anonymous = container(renderApp(h, actions, { ...initialState, session: { kind: 'anonymous' }, quickDraft: 'draft', quickTtlMinutes: 15 }));
+    const secret = anonymous.querySelector<HTMLTextAreaElement>('#quick-secret');
+    expect(secret?.textContent).toBe('draft');
+    expect(anonymous.querySelector<HTMLInputElement>('input[name="ttl"][value="15"]')?.hasAttribute('checked')).toBe(true);
+    anonymous.querySelector('form')?.dispatchEvent(new Event('submit', { cancelable: true }));
+    expect(calls.splice(0)).toEqual(['drop:draft,15']);
+    /* The account is a collapsed disclosure holding the single sign-in button. */
+    const account = anonymous.querySelector('details.card');
+    expect(account?.hasAttribute('open')).toBe(false);
+    expect(account?.querySelector('summary')?.textContent).toBe('Account (optional)');
+    expect(account?.textContent).toContain('Lost every device?');
     expect(anonymous.querySelectorAll('button[type="button"]')).toHaveLength(1);
     anonymous.querySelector<HTMLButtonElement>('button[type="button"]')?.click();
     expect(calls.splice(0)).toEqual(['continueWithPasskey:']);

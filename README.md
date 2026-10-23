@@ -24,10 +24,11 @@ User guides: [web](documentation/user/web.md) · [CLI](documentation/user/cli.md
 
 ## How to use
 
-1. Open the site and press **Continue with passkey**: an existing passkey signs you in, otherwise creating one creates the account. Save the recovery code it shows.
-2. Open [@secret_manager_bot](https://t.me/secret_manager_bot), press **Start**, open the link the bot replies with and press **Approve** on the site.
-3. Send the bot a value (or `key value` to also save it) — it replies with a one-time link and a ready-to-copy `curl` snippet.
-4. Share the link. Opening it shows a confirmation page; the secret is revealed only after pressing **Reveal secret** (a `POST` to the same url), so link-preview crawlers cannot burn it. Scripts can skip the page entirely: `curl -X POST <link>`.
+1. Open the site, paste a secret, pick a lifetime and press **Get one-time link** — no account needed. Everything below is optional.
+2. For saved keys, devices and the bot, expand **Account (optional)** and press **Continue with passkey**: an existing passkey signs you in, otherwise creating one creates the account. Save the recovery code it shows.
+3. Open [@secret_manager_bot](https://t.me/secret_manager_bot), press **Start**, open the link the bot replies with and press **Approve** on the site.
+4. Send the bot a value (or `key value` to also save it) — it replies with a one-time link and a ready-to-copy `curl` snippet.
+5. Share the link. Opening it shows a confirmation page; the secret is revealed only after pressing **Reveal secret** (a `POST` to the same url), so link-preview crawlers cannot burn it. Scripts can skip the page entirely: `curl -X POST <link>`.
 
 ## What it does
 
@@ -38,7 +39,8 @@ User guides: [web](documentation/user/web.md) · [CLI](documentation/user/cli.md
 - `/settings` picks the link lifetime, `/device` hands out an enrollment link for a new passkey, `/logout` unlinks the chat.
 - Fully multi-user: secrets are scoped to the Telegram user id; users never see each other's keys.
 
-The web site offers the same actions plus the **Devices** section (passkeys, the
+The web site opens on a **quick start** (paste a secret, get a one-time link, no
+account) and, once signed in, offers the same actions plus the **Devices** section (passkeys, the
 Telegram chat, console logins); the console utility offers them as commands and,
 above all, as an **interactive session with hidden input** so secrets never land in
 shell history.

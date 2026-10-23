@@ -22,6 +22,8 @@ export type ApiClient = {
   readonly logout: () => Done;
   readonly keys: () => Promise<Result<KeysResponse>>;
   readonly share: (key: string, value: string) => Promise<Result<IssuedLinkResponse>>;
+  /* Anonymous one-time link with its own lifetime (mcp AC-1.1). */
+  readonly drop: (value: string, ttlMinutes: number) => Promise<Result<IssuedLinkResponse>>;
   readonly save: (key: string, value: string) => Done;
   readonly linkFor: (key: string) => Promise<Result<IssuedLinkResponse>>;
   readonly remove: (key: string) => Done;

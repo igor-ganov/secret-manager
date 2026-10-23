@@ -9,6 +9,8 @@ export const initialState: AppState = {
   devices: { passkeys: [], telegram: { linked: false }, tokens: [] },
   enrollmentInfo: undefined,
   linkInfo: undefined,
+  quickDraft: '',
+  quickTtlMinutes: 5,
   notice: { kind: 'idle' },
   error: undefined,
   toast: '',
