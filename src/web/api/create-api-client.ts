@@ -19,6 +19,7 @@ export const createApiClient = (request: JsonRequester): ApiClient => ({
   logout: () => request('POST', '/api/auth/logout', decodeEmpty),
   keys: () => request('GET', '/api/secrets', decodeKeys),
   share: (key, value) => request('POST', '/api/links', decodeIssuedLink, { key, value }),
+  drop: (value, ttlMinutes) => request('POST', '/api/drops', decodeIssuedLink, { value, ttlMinutes }),
   save: (key, value) => request('PUT', secretPath(key), decodeEmpty, { value }),
   linkFor: (key) => request('POST', `${secretPath(key)}/link`, decodeIssuedLink),
   remove: (key) => request('DELETE', secretPath(key), decodeEmpty),

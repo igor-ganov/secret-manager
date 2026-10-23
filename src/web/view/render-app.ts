@@ -4,7 +4,7 @@ import type { H } from './h.ts';
 import { renderEnrollPage } from './render-enroll-page.ts';
 import { renderError } from './render-error.ts';
 import { renderLinkPage } from './render-link-page.ts';
-import { renderLoginCard } from './render-login-card.ts';
+import { renderVisitorHome } from './render-visitor-home.ts';
 import { renderWorkspace } from './render-workspace.ts';
 
 export type ViewContext = {
@@ -19,7 +19,7 @@ const bySession = ({ h, actions, deviceName }: ViewContext, state: AppState): re
     case 'loading':
       return [h('h1', {}, 'Secret manager'), ...renderError(h, state.error), h('p', { attrs: { class: 'muted' } }, 'Loading…')];
     case 'anonymous':
-      return [...renderLoginCard(h, actions), ...renderError(h, state.error)];
+      return renderVisitorHome(h, actions, state);
     case 'signed-in':
       return renderWorkspace(h, actions, state, session.user, deviceName);
   }

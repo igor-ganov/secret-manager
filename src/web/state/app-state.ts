@@ -39,6 +39,10 @@ export type AppState = {
   readonly devices: DevicesResponse;
   readonly enrollmentInfo: EnrollmentInfoResponse | undefined;
   readonly linkInfo: LoginRequestInfoResponse | undefined;
+  /* The quick start: a failed drop hands the typed secret back through here
+     so the full re-render does not wipe it; the lifetime is kept between drops. */
+  readonly quickDraft: string;
+  readonly quickTtlMinutes: number;
   readonly notice: Notice;
   readonly error: string | undefined;
   readonly toast: string;

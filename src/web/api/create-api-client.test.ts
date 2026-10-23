@@ -17,6 +17,7 @@ describe('createApiClient', () => {
   test('maps every operation to its route and encodes path parts', async () => {
     const { client, calls } = build();
     await client.share('k', 'v');
+    await client.drop('v', 15);
     await client.save('a/b', 'v');
     await client.linkFor('a/b');
     await client.remove('a/b');
@@ -30,6 +31,7 @@ describe('createApiClient', () => {
     await client.approveDevice('x');
     expect(calls).toEqual([
       { method: 'POST', path: '/api/links', body: { key: 'k', value: 'v' } },
+      { method: 'POST', path: '/api/drops', body: { value: 'v', ttlMinutes: 15 } },
       { method: 'PUT', path: '/api/secrets/a%2Fb', body: { value: 'v' } },
       { method: 'POST', path: '/api/secrets/a%2Fb/link', body: undefined },
       { method: 'DELETE', path: '/api/secrets/a%2Fb', body: undefined },
