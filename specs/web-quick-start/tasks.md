@@ -14,5 +14,5 @@
       it; `render-login-card.ts` removed. (AC-1.1, AC-2.1–2.2, AC-3.1–3.2)
 - [x] T5 Unit tests, lint, typecheck green; E2E green; screenshots at desktop
       and 400 px.
-- [ ] T6 Docs: `documentation/user/web.md` (Quick start first), README "How to
+- [x] T6 Docs: `documentation/user/web.md` (Quick start first), README "How to
       use"; passkey-accounts AC-2.1 note. PR, merge, CI green, production check.
