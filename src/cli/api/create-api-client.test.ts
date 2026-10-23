@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { createApiClient, createDeviceClient, type FetchFn } from './create-api-client.ts';
+import { createApiClient, createPublicClient, type FetchFn } from './create-api-client.ts';
 
 const CREDENTIALS = { serverUrl: 'https://s.test/', token: 'tok' };
 
@@ -43,20 +43,34 @@ describe('cli createApiClient', () => {
   });
 });
 
-describe('cli createDeviceClient (device-login AC-2.x)', () => {
+describe('cli createPublicClient (device-login AC-2.x, mcp AC-2.3)', () => {
   test('starts a request with its callback and claims with the device secret', async () => {
     const seen: { url?: string; init?: RequestInit } = {};
-    const device = createDeviceClient(respond(201, '{"url":"u","deviceSecret":"p","expiresAt":1}', seen))('https://s.test');
+    const device = createPublicClient(respond(201, '{"url":"u","deviceSecret":"p","expiresAt":1}', seen))('https://s.test');
     expect(await device.start('laptop', 'http://127.0.0.1:5/callback')).toEqual({ ok: true, value: { url: 'u', deviceSecret: 'p', expiresAt: 1 } });
     expect(new Headers(seen.init?.headers).has('authorization')).toBe(false);
     expect(seen.init?.body).toBe('{"label":"laptop","callback":"http://127.0.0.1:5/callback"}');
 
-    const claimer = createDeviceClient(respond(200, '{"token":"t"}', seen))('https://s.test');
+    const claimer = createPublicClient(respond(200, '{"token":"t"}', seen))('https://s.test');
     expect(await claimer.claim('p', 'abcd-efgh')).toEqual({ ok: true, value: { token: 't' } });
     expect(new Headers(seen.init?.headers).get('x-device-secret')).toBe('p');
-    expect(await createDeviceClient(respond(410, '{"error":"gone"}'))('https://s.test').claim('p', 'x')).toEqual({
+    expect(await createPublicClient(respond(410, '{"error":"gone"}'))('https://s.test').claim('p', 'x')).toEqual({
       ok: false,
       error: { kind: 'rejected', message: 'gone' },
+    });
+  });
+
+  test('drops a value with a lifetime and gets the link back, without credentials', async () => {
+    const seen: { url?: string; init?: RequestInit } = {};
+    const link = { url: 'https://s.test/s/t', curl: 'curl -X POST https://s.test/s/t', ttlMinutes: 90 };
+    const client = createPublicClient(respond(201, JSON.stringify(link), seen))('https://s.test/');
+    expect(await client.drop('v', 90)).toEqual({ ok: true, value: link });
+    expect(seen.url).toBe('https://s.test/api/drops');
+    expect(seen.init?.body).toBe('{"value":"v","ttlMinutes":90}');
+    expect(new Headers(seen.init?.headers).has('authorization')).toBe(false);
+    expect(await createPublicClient(respond(400, '{"error":"Too long."}'))('https://s.test').drop('v', 1)).toEqual({
+      ok: false,
+      error: { kind: 'rejected', message: 'Too long.' },
     });
   });
 });

@@ -24,11 +24,12 @@ export const createSharingService = ({
   const getTtlMinutes = async (userId: number): Promise<number> =>
     (await settings.getTtlMinutes(userId)) ?? linkTtlMinutes;
 
-  const share = async (userId: number, value: string): Promise<IssuedLink> => {
-    const ttlMinutes = await getTtlMinutes(userId);
+  const drop = async (value: string, ttlMinutes: number): Promise<IssuedLink> => {
     const token = await links.issue(value, ttlMinutes * MS_PER_MINUTE);
     return { url: buildLinkUrl(token), ttlMinutes };
   };
+
+  const share = async (userId: number, value: string): Promise<IssuedLink> => drop(value, await getTtlMinutes(userId));
 
   const save = (userId: number, key: string, value: string): Promise<void> =>
     secrets.save(userId, key, value);
@@ -45,6 +46,7 @@ export const createSharingService = ({
 
   return {
     share,
+    drop,
     save,
     saveAndShare,
     linkFor,

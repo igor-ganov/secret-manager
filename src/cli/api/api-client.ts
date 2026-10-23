@@ -35,8 +35,10 @@ export type ApiClient = {
   readonly revokeToken: (id: string) => Promise<ApiResult<true>>;
 };
 
-/* The unauthenticated half of the device-login flow (device-login US-2). */
-export type DeviceClient = {
+/* The unauthenticated half of the API: the device-login handshake
+   (device-login US-2) and anonymous drops (mcp US-1). */
+export type PublicClient = {
   readonly start: (label: string, callback: string) => Promise<ApiResult<DeviceStartResponse>>;
   readonly claim: (deviceSecret: string, grant: string) => Promise<ApiResult<DeviceClaimResponse>>;
+  readonly drop: (value: string, ttlMinutes: number) => Promise<ApiResult<IssuedLinkResponse>>;
 };

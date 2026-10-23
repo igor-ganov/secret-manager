@@ -1,5 +1,5 @@
 import { homedir, hostname } from 'node:os';
-import { createApiClient, createDeviceClient } from './api/create-api-client.ts';
+import { createApiClient, createPublicClient } from './api/create-api-client.ts';
 import type { CommandContext } from './commands/command.ts';
 import { createConfigStore } from './config/create-config-store.ts';
 import { resolveConfigPath } from './config/resolve-config-path.ts';
@@ -10,6 +10,7 @@ import { createConsoleIo } from './io/create-console-io.ts';
 import { createLineIo } from './io/create-line-io.ts';
 import { createLineReader } from './io/create-line-reader.ts';
 import { openBrowser } from './io/open-browser.ts';
+import { runMcp } from './mcp/run-mcp.ts';
 import { runCommand } from './run-command.ts';
 import { runSession } from './run-session.ts';
 
@@ -20,11 +21,12 @@ const createIo = (): ConsoleIo =>
 
 const fetchFn = (input: string, init: RequestInit) => fetch(input, init);
 
-const context: CommandContext = {
-  io: createIo(),
+/* Everything a command needs except the console: the MCP server shares it
+   while handing stdin and stdout to the protocol instead. */
+const headless: Omit<CommandContext, 'io'> = {
   config: createConfigStore(resolveConfigPath({ platform: process.platform, env: process.env, homeDir: homedir() })),
   createClient: createApiClient(fetchFn),
-  createDeviceClient: createDeviceClient(fetchFn),
+  createPublicClient: createPublicClient(fetchFn),
   readStdin: () => Bun.stdin.text(),
   defaultServerUrl: resolveDefaultServerUrl(process.env),
   deviceLabel: `Console on ${hostname()}`,
@@ -34,6 +36,13 @@ const context: CommandContext = {
   now: Date.now,
 };
 
-const argv = process.argv.slice(2);
-const code = argv.length === 0 ? await runSession(context) : await runCommand(context, argv);
-process.exit(code);
+const run = async (argv: readonly string[]): Promise<number> => {
+  const [name, argument] = argv;
+  if (name === 'mcp') {
+    return runMcp({ ...headless, printError: (text) => process.stderr.write(`${text}\n`) }, argument);
+  }
+  const context: CommandContext = { io: createIo(), ...headless };
+  return argv.length === 0 ? runSession(context) : runCommand(context, argv);
+};
+
+process.exit(await run(process.argv.slice(2)));

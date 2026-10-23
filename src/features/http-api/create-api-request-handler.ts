@@ -14,6 +14,7 @@ import { createAuthenticator, isCrossSiteMutation } from './authenticate.ts';
 import { clientKeyOf, createRateLimiter } from './create-rate-limiter.ts';
 import { createDeviceRoutes } from './device-routes.ts';
 import { createDevicesRoutes } from './devices-routes.ts';
+import { createDropRoutes } from './drop-routes.ts';
 import { createEnrollmentRoutes } from './enrollment-routes.ts';
 import { errorResponse, forbidden, notFound, unauthorized } from './json-response.ts';
 import { matchPath } from './match-path.ts';
@@ -75,6 +76,7 @@ export const createApiRequestHandler = (deps: ApiDependencies) => {
     ...createDeviceRoutes(deps),
     ...createDevicesRoutes(deps),
     ...createSecretRoutes(deps.sharing),
+    ...createDropRoutes(deps.sharing),
     ...createSettingsRoutes(deps.sharing),
   ];
 

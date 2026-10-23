@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { ApiClient, ApiCredentials, ApiResult, DeviceClient } from './api/api-client.ts';
+import type { ApiClient, ApiCredentials, ApiResult, PublicClient } from './api/api-client.ts';
 import type { CommandContext } from './commands/command.ts';
 import { NOT_LOGGED_IN } from './commands/require-client.ts';
 import { TOKEN_REJECTED } from './commands/to-outcome.ts';
@@ -87,7 +87,7 @@ const build = (
       return ok(true);
     },
   });
-  const fakeDeviceClient = (serverUrl: string): DeviceClient => ({
+  const fakePublicClient = (serverUrl: string): PublicClient => ({
     start: async (label, callback) => {
       calls.push(`start:${serverUrl}:${label}:${callback}`);
       return ok({ url: LOGIN_URL, deviceSecret: 'secret', expiresAt: 1000 + ttlMs });
@@ -97,6 +97,10 @@ const build = (
       return grant === 'good-code'
         ? ok({ token: 'fresh-token' })
         : { ok: false, error: { kind: 'rejected', message: 'This login request has expired or was denied.' } };
+    },
+    drop: async (value, ttlMinutes) => {
+      calls.push(`drop:${value}:${String(ttlMinutes)}`);
+      return ok(LINK);
     },
   });
   const context: CommandContext = {
@@ -109,7 +113,7 @@ const build = (
       },
     },
     createClient: fakeClient,
-    createDeviceClient: fakeDeviceClient,
+    createPublicClient: fakePublicClient,
     readStdin: async () => 'from-stdin\n',
     defaultServerUrl: withoutDefaultServer ? undefined : 'https://default',
     deviceLabel: 'Console on box',
@@ -181,6 +185,15 @@ describe('runCommand', () => {
     const { context, err } = build([], { config: { serverUrl: 'https://s', token: 'bad' } });
     expect(await runCommand(context, ['whoami'])).toBe(2);
     expect(err).toEqual([TOKEN_REJECTED]);
+  });
+
+  test('mcp is listed by help but only runs in argument mode (mcp AC-2.5)', async () => {
+    const { context, out, err, calls } = build([]);
+    expect(await runCommand(context, ['help'])).toBe(0);
+    expect(out.some((line) => /^ {2}mcp \[server-url\]/.test(line))).toBe(true);
+    expect(await runCommand(context, ['mcp'])).toBe(64);
+    expect(err).toEqual(['The MCP server runs in argument mode: secret mcp [server-url]']);
+    expect(calls).toEqual([]);
   });
 
   test('unknown commands exit 64 (AC-3.5)', async () => {

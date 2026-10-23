@@ -1,19 +1,14 @@
-import { buildCurlSnippet } from '../sharing/build-curl-snippet.ts';
 import { isValidKey } from '../sharing/is-valid-key.ts';
-import type { IssuedLink, SharingService } from '../sharing/sharing-service.ts';
-import type { IssuedLinkResponse, KeysResponse, ValueResponse } from './api-types.ts';
+import type { SharingService } from '../sharing/sharing-service.ts';
+import type { KeysResponse, ValueResponse } from './api-types.ts';
 import { badRequest, jsonResponse, noContent, notFound } from './json-response.ts';
+import { linkResponse } from './link-response.ts';
 import { readJsonObject, readString } from './read-json-object.ts';
 import type { Route } from './route.ts';
 
 export const KEY_ERROR = 'Key must be 1–62 bytes without whitespace.';
 const VALUE_ERROR = 'Value must be a non-empty string.';
 const MISSING_KEY = 'No such key.';
-
-const linkResponse = (link: IssuedLink): Response => {
-  const body: IssuedLinkResponse = { ...link, curl: buildCurlSnippet(link.url) };
-  return jsonResponse(body, 201);
-};
 
 const readValue = async (request: Request): Promise<string | undefined> => {
   const body = await readJsonObject(request);

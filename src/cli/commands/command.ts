@@ -1,4 +1,4 @@
-import type { ApiClient, ApiCredentials, DeviceClient } from '../api/api-client.ts';
+import type { ApiClient, ApiCredentials, PublicClient } from '../api/api-client.ts';
 import type { ConfigStore } from '../config/create-config-store.ts';
 import type { ConsoleIo } from '../io/console-io.ts';
 import type { CallbackListener } from '../io/create-callback-listener.ts';
@@ -8,7 +8,7 @@ export type CommandContext = {
   readonly io: ConsoleIo;
   readonly config: ConfigStore;
   readonly createClient: (credentials: ApiCredentials) => ApiClient;
-  readonly createDeviceClient: (serverUrl: string) => DeviceClient;
+  readonly createPublicClient: (serverUrl: string) => PublicClient;
   /* Whole standard input, for values given as `-`. */
   readonly readStdin: () => Promise<string>;
   readonly defaultServerUrl: string | undefined;

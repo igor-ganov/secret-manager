@@ -56,6 +56,15 @@ describe('createSharingService', () => {
     expect(await service.linkFor(USER, 'missing')).toBeUndefined();
   });
 
+  test('drop issues an anonymous link with the lifetime asked for and saves nothing (mcp AC-1.1)', async () => {
+    const { service, links, issued } = build();
+    await service.setTtlMinutes(USER, 30);
+    expect(await service.drop('v', 90)).toEqual({ url: 'https://x.test/s/tok1', ttlMinutes: 90 });
+    expect(issued).toEqual([90 * 60 * 1000]);
+    expect(await links.consume('tok1')).toBe('v');
+    expect(await service.list(USER)).toEqual([]);
+  });
+
   test('links honor the user-configured lifetime (AC-5.1, AC-5.2)', async () => {
     const { service, issued } = build();
     await service.setTtlMinutes(USER, 30);

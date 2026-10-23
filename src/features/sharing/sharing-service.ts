@@ -9,6 +9,8 @@ export type IssuedLink = {
 export type SharingService = {
   /* One-time link to an unsaved value. */
   readonly share: (userId: number, value: string) => Promise<IssuedLink>;
+  /* One-time link from nobody in particular, living exactly `ttlMinutes`. */
+  readonly drop: (value: string, ttlMinutes: number) => Promise<IssuedLink>;
   readonly save: (userId: number, key: string, value: string) => Promise<void>;
   readonly saveAndShare: (userId: number, key: string, value: string) => Promise<IssuedLink>;
   /* Fresh link to a stored value; undefined when the key does not exist. */
