@@ -171,3 +171,21 @@ on any failure it calls `abort` and returns the failure as a `Result`.
   `mcp.integration.test.ts` — AC-6.x; bot: `create-bot.test.ts` — AC-7.x.
 - Site: `view.test.ts`, `drop-file.test.ts`, and Playwright `e2e/web.spec.ts`
   (*secret files*) — AC-4.x, 8.1.
+
+## 8. Decisions taken during implementation
+
+- **Link shape.** The brief named `{ url, curl, expiresAt }`; every existing
+  link route answers `{ url, curl, ttlMinutes }` (http-api AC-4.1) and every
+  client decodes that, so file links use it too. The MCP tool adds `expiresAt`
+  as `create_one_time_link` already does.
+- **Picker placement.** The file picker sits after the submit button ("or
+  attach a file"), so the keyboard order of the text flow (Secret → lifetime →
+  submit, web-quick-start AC-3.1) is unchanged; once a file is chosen, focus
+  moves to **Remove file**.
+- **Bot limit.** 20 MB is taken as 20 000 000 bytes, the conservative reading
+  of the Bot API's "up to 20 MB".
+- **Writing downloads in the utility.** `Bun.write(path, new Response(stream))`
+  never settles for a multi-megabyte network stream in Bun 1.3.14; downloads
+  are written chunk by chunk through a `FileSink` instead.
+- **Rate limit.** `/api/file-drops` has its own 30-per-minute bucket per
+  address (the limiter keys on the route), not a share of `/api/drops`'.
