@@ -20,3 +20,14 @@ LINK_TTL_MINUTES = "5"
 # Public origin: passkey relying party and base of every link the worker
 # hands out. Change it together with a custom domain.
 ORIGIN = "https://secret-manager.igor-ganov.workers.dev"
+
+# Secret files (specs/secret-files): the bytes live here, metadata in D1.
+# The bucket has a lifecycle rule `expire-leftovers` (objects after 2 days,
+# incomplete multipart uploads after 1 day) as a backstop to the cron below.
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "secret-manager-files"
+
+# Deletes expired file links and aborts stale uploads (`scheduled` in worker.ts).
+[triggers]
+crons = ["*/15 * * * *"]

@@ -12,7 +12,7 @@ const app = createLocalApp(
   { botToken: '1:integration', port: 0, baseUrl: 'http://127.0.0.1', databasePath: ':memory:', linkTtlMinutes: 5 },
   { ceremonies: createFakeCeremonies() },
 );
-const server = Bun.serve({ port: 0, fetch: app.handleRequest });
+const server = Bun.serve({ port: 0, fetch: (request) => app.handleRequest(request) });
 afterAll(() => server.stop(true));
 
 const ACCOUNT = 2 ** 40 + 9;

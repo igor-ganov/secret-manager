@@ -1,7 +1,8 @@
 import { API_PATH_PREFIX } from '../http-api/create-api-request-handler.ts';
-import { LINK_PATH_PREFIX } from '../one-time-links/create-link-request-handler.ts';
+import { LINK_PATH_PREFIX, type Background } from '../one-time-links/create-link-request-handler.ts';
 
-export type RequestHandler = (request: Request) => Promise<Response>;
+/* `background` carries work past the response (the Worker's waitUntil). */
+export type RequestHandler = (request: Request, background?: Background) => Promise<Response>;
 
 export type AppHandlers = {
   readonly api: RequestHandler;
@@ -12,13 +13,13 @@ export type AppHandlers = {
    site files are served in front of this by the respective runtime. */
 export const createAppRequestHandler =
   ({ api, links }: AppHandlers): RequestHandler =>
-  async (request) => {
+  async (request, background) => {
     const { pathname } = new URL(request.url);
     if (pathname.startsWith(API_PATH_PREFIX)) {
       return api(request);
     }
     if (pathname.startsWith(LINK_PATH_PREFIX)) {
-      return links(request);
+      return links(request, background);
     }
     return new Response('Not found', { status: 404 });
   };
