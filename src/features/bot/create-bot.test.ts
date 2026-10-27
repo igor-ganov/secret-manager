@@ -38,6 +38,8 @@ const createFakes = (linked: boolean) => {
   const saved: string[] = [];
   const links = new Map<number, number>(linked ? [[USER_ID, ACCOUNT]] : []);
   const loginRequests: string[] = [];
+  const sharedFiles: string[] = [];
+  const downloads: string[] = [];
   const secrets: SecretStore = {
     save: async (userId, key) => {
       saved.push(`${userId}:${key}`);
@@ -96,6 +98,8 @@ const createFakes = (linked: boolean) => {
     saved,
     links,
     loginRequests,
+    sharedFiles,
+    downloads,
     primePending: (key: string) => (pendingKey = key),
   };
 };
@@ -121,13 +125,24 @@ const buildBot = (linked = true) => {
       },
     },
     enrollmentIssuer: async () => ({ url: ENROLL_URL, qr: '', expiresAt: 0 }),
+    files: {
+      shareBytes: async (userId, { name, contentType }, bytes) => {
+        fakes.sharedFiles.push(`${String(userId)}:${name}:${contentType}:${new TextDecoder().decode(bytes)}`);
+        return { ok: true, value: { url: 'https://example.test/s/file-token', ttlMinutes: 5 } };
+      },
+    },
+    downloadFile: async (filePath) => {
+      fakes.downloads.push(filePath);
+      return new TextEncoder().encode('file-content');
+    },
     botInfo: BOT_INFO,
   });
 
   const calls: ApiCall[] = [];
   const record: Transformer = (_prev, method, payload) => {
     calls.push({ method, payload: payload as Record<string, unknown> });
-    return Promise.resolve({ ok: true, result: true as never });
+    const result = method === 'getFile' ? { file_id: 'doc-1', file_unique_id: 'u-1', file_path: 'documents/file_1.pem' } : true;
+    return Promise.resolve({ ok: true, result: result as never });
   };
   bot.api.config.use(record);
 
@@ -300,5 +315,50 @@ describe('createBot link-lifetime settings', () => {
     await bot.handleUpdate(textUpdate('lonely-secret', 88));
 
     expect(fakes.issuedTtlsMs).toEqual([5 * 60 * 1000]);
+  });
+});
+
+const documentUpdate = (fileSize: number, messageId = 55): Update => ({
+  update_id: 5,
+  message: {
+    message_id: messageId,
+    date: 0,
+    chat: { id: USER_ID, type: 'private', first_name: 'U' },
+    from: { id: USER_ID, is_bot: false, first_name: 'U', username: 'ada' },
+    document: { file_id: 'doc-1', file_unique_id: 'u-1', file_name: 'server.pem', mime_type: 'application/x-pem-file', file_size: fileSize },
+  },
+});
+
+describe('createBot secret files (secret-files US-7)', () => {
+  test('a document of up to 20 MB becomes a one-time file link and the message is deleted (AC-7.1)', async () => {
+    const { bot, calls, fakes } = buildBot();
+    await bot.handleUpdate(documentUpdate(12, 55));
+    expect(calls.find((call) => call.method === 'getFile')?.payload).toMatchObject({ file_id: 'doc-1' });
+    expect(fakes.downloads).toEqual(['documents/file_1.pem']);
+    expect(fakes.sharedFiles).toEqual([`${String(ACCOUNT)}:server.pem:application/x-pem-file:file-content`]);
+    const reply = String(messageCalls(calls)[0]?.payload['text']);
+    expect(reply).toContain('https://example.test/s/file-token');
+    expect(reply).toContain('curl -X POST -OJ https://example.test/s/file-token');
+    expect(reply).toContain('server.pem');
+    expect(deleteCalls(calls)[0]?.payload).toMatchObject({ message_id: 55 });
+  });
+
+  test('a larger document is explained and pointed to the site and the utility (AC-7.2)', async () => {
+    const { bot, calls, fakes } = buildBot();
+    await bot.handleUpdate(documentUpdate(20 * 1000 * 1000 + 1));
+    expect(calls.some((call) => call.method === 'getFile')).toBe(false);
+    expect(fakes.sharedFiles).toEqual([]);
+    const reply = String(messageCalls(calls)[0]?.payload['text']);
+    expect(reply).toContain('20 MB');
+    expect(reply).toContain('100 MiB');
+    expect(reply).toContain('secret share --file');
+  });
+
+  test('an unlinked chat sending a document only gets the login link (device-login AC-1.1)', async () => {
+    const { bot, calls, fakes } = buildBot(false);
+    await bot.handleUpdate(documentUpdate(12));
+    expect(messageCalls(calls)[0]?.payload['text']).toContain(LOGIN_URL);
+    expect(fakes.downloads).toEqual([]);
+    expect(deleteCalls(calls)).toHaveLength(1);
   });
 });

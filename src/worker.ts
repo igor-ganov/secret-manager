@@ -4,6 +4,7 @@ import { createD1ApiTokenStore } from './features/api-tokens/create-d1-api-token
 import { createAppRequestHandler, type RequestHandler } from './features/app/create-app-request-handler.ts';
 import { BOT_COMMANDS, createBot } from './features/bot/create-bot.ts';
 import { createD1PendingSetStore } from './features/bot/create-d1-pending-set-store.ts';
+import { createTelegramFileDownloader } from './features/bot/create-telegram-file-downloader.ts';
 import type { D1Database } from './features/cloudflare/d1-types.ts';
 import type { R2Bucket } from './features/cloudflare/r2-types.ts';
 import { createDeviceLogin } from './features/device-login/create-device-login.ts';
@@ -93,6 +94,8 @@ const createApp = (env: WorkerEnv): App => {
     telegramLinks,
     deviceLogin,
     enrollmentIssuer: createEnrollmentIssuer(enrollments, webAuthn.origin, now),
+    files,
+    downloadFile: createTelegramFileDownloader(env.BOT_TOKEN),
   });
   const registerCommands = async (): Promise<void> => {
     try {
