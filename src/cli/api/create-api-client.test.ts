@@ -74,3 +74,29 @@ describe('cli createPublicClient (device-login AC-2.x, mcp AC-2.3)', () => {
     });
   });
 });
+
+describe('cli file uploads (secret-files AC-1.1, AC-1.2, AC-1.5–1.7)', () => {
+  test('parts go up as raw bytes; begin, drop, complete and abort hit their routes', async () => {
+    const seen: { url?: string; init?: RequestInit }[] = [];
+    const fetchFn: FetchFn = async (url, init) => {
+      seen.push({ url, init });
+      return new Response(url.endsWith('/parts/2') ? '' : '{"uploadId":"u","partSize":4,"partCount":2,"expiresAt":1}', { status: url.endsWith('/parts/2') ? 204 : 201 });
+    };
+    expect(await createApiClient(fetchFn)(CREDENTIALS).beginFile('a.txt', 5, 'text/plain')).toMatchObject({ ok: true, value: { uploadId: 'u' } });
+    const client = createPublicClient(fetchFn)('https://s.test');
+    await client.dropFile('a.txt', 5, 'text/plain', 15);
+    expect(await client.putPart('u/1', 2, new TextEncoder().encode('abcd'))).toEqual({ ok: true, value: true });
+    await client.completeUpload('u/1');
+    await client.abortUpload('u/1');
+    expect(seen.map(({ url, init }) => `${init?.method ?? ''} ${url}`)).toEqual([
+      'POST https://s.test/api/files',
+      'POST https://s.test/api/file-drops',
+      'PUT https://s.test/api/uploads/u%2F1/parts/2',
+      'POST https://s.test/api/uploads/u%2F1/complete',
+      'DELETE https://s.test/api/uploads/u%2F1',
+    ]);
+    expect(new Headers(seen[2]?.init?.headers).get('content-type')).toBe('application/octet-stream');
+    expect(seen[2]?.init?.body).toEqual(new TextEncoder().encode('abcd'));
+    expect(JSON.parse(String(seen[1]?.init?.body))).toEqual({ name: 'a.txt', size: 5, contentType: 'text/plain', ttlMinutes: 15 });
+  });
+});

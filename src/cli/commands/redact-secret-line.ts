@@ -6,7 +6,8 @@ type Redactor = (args: readonly string[]) => string | undefined;
    replaced on screen (and kept out of the prompt history) the moment it is
    submitted, so a value entered inline lingers no longer than a hidden one. */
 const REDACTORS: Readonly<Record<string, Redactor>> = {
-  share: (args) => (args.length === 0 ? undefined : `share ${MASK}`),
+  /* `share --file <path>` carries a path, not a secret. */
+  share: (args) => (args.length === 0 || args[0] === '--file' ? undefined : `share ${MASK}`),
   set: (args) => (args.length < 2 ? undefined : `set ${args[0]} ${MASK}`),
 };
 

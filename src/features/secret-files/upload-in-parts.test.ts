@@ -33,7 +33,7 @@ const build = ({ failPart, failuresBeforeSuccess = 99, failComplete = false }: S
 };
 
 const CONTENT = Uint8Array.from([1, 2, 3, 4, 5, 6, 7, 8, 9, 0]);
-const readRange = async (start: number, end: number): Promise<Uint8Array> => CONTENT.slice(start, end);
+const readRange = async (start: number, end: number): Promise<Uint8Array<ArrayBuffer>> => CONTENT.slice(start, end);
 
 describe('uploadInParts (secret-files §6)', () => {
   test('begins, sends every part in order with progress, completes (AC-1.5, AC-1.6)', async () => {

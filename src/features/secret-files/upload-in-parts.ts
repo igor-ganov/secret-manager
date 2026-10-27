@@ -1,17 +1,20 @@
 import type { IssuedLinkResponse, UploadTicketResponse } from '../http-api/api-types.ts';
 import type { Result } from '../result/result.ts';
 
+/* Bytes backed by a plain ArrayBuffer: what fetch accepts as a body. */
+export type Bytes = Uint8Array<ArrayBuffer>;
+
 /* The four calls of a chunked upload, as each client makes them (fetch from
    the site, the utility or the MCP server). `E` is that client's error. */
 export type UploadTransport<E> = {
   readonly begin: () => Promise<Result<UploadTicketResponse, E>>;
-  readonly putPart: (uploadId: string, partNumber: number, bytes: Uint8Array) => Promise<Result<true, E>>;
+  readonly putPart: (uploadId: string, partNumber: number, bytes: Bytes) => Promise<Result<true, E>>;
   readonly complete: (uploadId: string) => Promise<Result<IssuedLinkResponse, E>>;
   readonly abort: (uploadId: string) => Promise<unknown>;
 };
 
 /* Bytes [start, end) of the file being uploaded. */
-export type ReadRange = (start: number, end: number) => Promise<Uint8Array>;
+export type ReadRange = (start: number, end: number) => Promise<Bytes>;
 
 const ATTEMPTS_PER_PART = 3;
 
@@ -19,7 +22,7 @@ const putWithRetry = async <E>(
   transport: UploadTransport<E>,
   uploadId: string,
   partNumber: number,
-  bytes: Uint8Array,
+  bytes: Bytes,
   attempt = 1,
 ): Promise<Result<true, E>> => {
   const sent = await transport.putPart(uploadId, partNumber, bytes);

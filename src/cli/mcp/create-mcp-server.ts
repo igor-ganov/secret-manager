@@ -5,11 +5,17 @@ import type { IssuedLinkResponse } from '../../features/http-api/api-types.ts';
 import { DROP_MAX_TTL_MINUTES, DROP_MAX_VALUE_BYTES, isValidDropValue } from '../../features/sharing/drop-limits.ts';
 import type { ApiFailure, ApiResult } from '../api/api-client.ts';
 import { issuedLinkLines } from '../commands/issued-link-lines.ts';
+import { registerFileTools, type FileToolDependencies } from './file-tools.ts';
+
+export { FETCH_TOOL_NAME, FILE_TOOL_NAME } from './file-tools.ts';
 
 export const TOOL_NAME = 'create_one_time_link';
 
-const INSTRUCTIONS =
-  'Hand credentials to the person through one-time links: call create_one_time_link with the value and how long the link may live, then reply with the link. Never write the value itself into the conversation.';
+const INSTRUCTIONS = [
+  'Hand credentials to the person through one-time links: call create_one_time_link with the value and how long the link may live, then reply with the link. Never write the value itself into the conversation.',
+  'For a secret file (key, certificate, .env, dump; up to 100 MiB) call create_one_time_file_link with its path instead of pasting its content.',
+  'When the person gives you a one-time link, call fetch_one_time_link with an outPath: the content lands in that file and never in the chat; do not read it back into the conversation unless the person asks.',
+].join(' ');
 
 const DESCRIPTION = [
   'Turns a secret (password, token, key, connection string) into a link that opens exactly once and then dies.',
@@ -17,9 +23,8 @@ const DESCRIPTION = [
   `The link lives ttlMinutes minutes (1–${String(DROP_MAX_TTL_MINUTES)}); nothing is stored once it is opened or expired.`,
 ].join(' ');
 
-export type McpServerDependencies = {
+export type McpServerDependencies = FileToolDependencies & {
   readonly drop: (value: string, ttlMinutes: number) => Promise<ApiResult<IssuedLinkResponse>>;
-  readonly now: () => number;
 };
 
 const INPUT = {
@@ -55,9 +60,9 @@ const toolLink = (link: IssuedLinkResponse, expiresAt: string): CallToolResult =
   structuredContent: { ...link, expiresAt },
 });
 
-/* The protocol side of `secret mcp`: one tool over whatever transport the
+/* The protocol side of `secret mcp`: three tools over whatever transport the
    caller connects, so tests drive it in memory and main.ts over stdio. */
-export const createMcpServer = ({ drop, now }: McpServerDependencies): McpServer => {
+export const createMcpServer = ({ drop, dropFile, fetchLink, now }: McpServerDependencies): McpServer => {
   const server = new McpServer({ name: 'secret-manager', version: '1.0.0' }, { instructions: INSTRUCTIONS });
   server.registerTool(
     TOOL_NAME,
@@ -69,5 +74,6 @@ export const createMcpServer = ({ drop, now }: McpServerDependencies): McpServer
         : toolError(failureText(result.error));
     },
   );
+  registerFileTools(server, { dropFile, fetchLink, now });
   return server;
 };
