@@ -1,6 +1,7 @@
 import { decodeDeviceClaim, decodeDeviceStart } from '../../features/http-api/decoders/decode-device.ts';
 import { decodeDevices } from '../../features/http-api/decoders/decode-devices.ts';
 import { decodeEmpty } from '../../features/http-api/decoders/decode-empty.ts';
+import { decodeUploadTicket } from '../../features/http-api/decoders/decode-files.ts';
 import { decodeIssuedLink } from '../../features/http-api/decoders/decode-issued-link.ts';
 import { decodeKeys } from '../../features/http-api/decoders/decode-keys.ts';
 import { decodeMe } from '../../features/http-api/decoders/decode-me.ts';
@@ -47,15 +48,20 @@ type Caller = <T>(
   headers?: Readonly<Record<string, string>>,
 ) => Promise<ApiResult<T>>;
 
+/* JSON for every route except file parts, which travel as raw bytes. */
+const bodyInit = (body: unknown): Pick<RequestInit, 'body'> & { readonly contentType: string } => {
+  if (body instanceof Uint8Array) {
+    return { contentType: 'application/octet-stream', body: new Uint8Array(body) };
+  }
+  return { contentType: 'application/json', ...(body === undefined ? {} : { body: JSON.stringify(body) }) };
+};
+
 const createCaller =
   (fetchFn: FetchFn, serverUrl: string, baseHeaders: Readonly<Record<string, string>>): Caller =>
   async (method, path, decode, body, headers = {}) => {
     const base = serverUrl.replace(/\/+$/, '');
-    const init: RequestInit = {
-      method,
-      headers: { ...baseHeaders, 'content-type': 'application/json', ...headers },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    };
+    const { contentType, ...payload } = bodyInit(body);
+    const init: RequestInit = { method, headers: { ...baseHeaders, 'content-type': contentType, ...headers }, ...payload };
     try {
       return await decodeResponse(await fetchFn(`${base}${path}`, init), decode);
     } catch (error) {
@@ -64,6 +70,7 @@ const createCaller =
   };
 
 const secretPath = (key: string): string => `/api/secrets/${encodeURIComponent(key)}`;
+const uploadPath = (uploadId: string): string => `/api/uploads/${encodeURIComponent(uploadId)}`;
 
 export const createApiClient =
   (fetchFn: FetchFn) =>
@@ -80,6 +87,7 @@ export const createApiClient =
       saveSettings: (linkTtlMinutes) => call('PUT', '/api/settings', decodeEmpty, { linkTtlMinutes }),
       devices: () => call('GET', '/api/devices', decodeDevices),
       revokeToken: (id) => call('DELETE', `/api/tokens/${encodeURIComponent(id)}`, decodeEmpty),
+      beginFile: (name, size, contentType) => call('POST', '/api/files', decodeUploadTicket, { name, size, contentType }),
     };
   };
 
@@ -92,5 +100,9 @@ export const createPublicClient =
       claim: (deviceSecret, grant) =>
         call('POST', '/api/device/claim', decodeDeviceClaim, { grant }, { 'x-device-secret': deviceSecret }),
       drop: (value, ttlMinutes) => call('POST', '/api/drops', decodeIssuedLink, { value, ttlMinutes }),
+      dropFile: (name, size, contentType, ttlMinutes) => call('POST', '/api/file-drops', decodeUploadTicket, { name, size, contentType, ttlMinutes }),
+      putPart: (uploadId, partNumber, bytes) => call('PUT', `${uploadPath(uploadId)}/parts/${String(partNumber)}`, decodeEmpty, bytes),
+      completeUpload: (uploadId) => call('POST', `${uploadPath(uploadId)}/complete`, decodeIssuedLink),
+      abortUpload: (uploadId) => call('DELETE', uploadPath(uploadId), decodeEmpty),
     };
   };

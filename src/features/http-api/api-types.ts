@@ -76,3 +76,16 @@ export type DeviceApprovalResponse = {
 };
 
 export type DeviceClaimResponse = { readonly token: string };
+
+/* An open chunked upload (secret-files AC-1.1). */
+export type UploadTicketResponse = {
+  readonly uploadId: string;
+  readonly partSize: number;
+  readonly partCount: number;
+  readonly expiresAt: number;
+};
+
+/* What a live one-time link holds, without opening it (secret-files AC-2.4). */
+export type LinkInfoResponse =
+  | { readonly kind: 'text' }
+  | { readonly kind: 'file'; readonly name: string; readonly size: number };

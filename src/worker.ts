@@ -1,10 +1,12 @@
 import { webhookCallback } from 'grammy';
 import { createD1AccountStore } from './features/accounts/create-d1-account-store.ts';
 import { createD1ApiTokenStore } from './features/api-tokens/create-d1-api-token-store.ts';
-import { createAppRequestHandler } from './features/app/create-app-request-handler.ts';
+import { createAppRequestHandler, type RequestHandler } from './features/app/create-app-request-handler.ts';
 import { BOT_COMMANDS, createBot } from './features/bot/create-bot.ts';
 import { createD1PendingSetStore } from './features/bot/create-d1-pending-set-store.ts';
+import { createTelegramFileDownloader } from './features/bot/create-telegram-file-downloader.ts';
 import type { D1Database } from './features/cloudflare/d1-types.ts';
+import type { R2Bucket } from './features/cloudflare/r2-types.ts';
 import { createDeviceLogin } from './features/device-login/create-device-login.ts';
 import { createD1LoginRequestStore } from './features/device-login/create-d1-login-request-store.ts';
 import { createD1TelegramLinkStore } from './features/device-login/create-d1-telegram-link-store.ts';
@@ -21,12 +23,17 @@ import { createPasskeyCeremonies } from './features/passkeys/create-passkey-cere
 import { webAuthnConfigFromUrl } from './features/passkeys/webauthn-config.ts';
 import { createD1SecretStore } from './features/secrets/create-d1-secret-store.ts';
 import { createD1SettingsStore } from './features/settings/create-d1-settings-store.ts';
+import { createD1FileLinkStore } from './features/secret-files/create-d1-file-link-store.ts';
+import { createFileSharingService } from './features/secret-files/create-file-sharing-service.ts';
+import { createR2FileObjectStore } from './features/secret-files/create-r2-file-object-store.ts';
 import { createSharingService } from './features/sharing/create-sharing-service.ts';
 
 export const WEBHOOK_PATH = '/webhook';
 
 export type WorkerEnv = {
   readonly DB: D1Database;
+  /* R2 bucket secret-manager-files: the bytes of secret files. */
+  readonly FILES: R2Bucket;
   readonly BOT_TOKEN: string;
   readonly WEBHOOK_SECRET: string;
   /* Public origin of the site: relying party for passkeys and base of every
@@ -37,11 +44,15 @@ export type WorkerEnv = {
 
 type App = {
   readonly handleWebhook: (request: Request) => Promise<Response>;
-  readonly handleRequest: (request: Request) => Promise<Response>;
+  readonly handleRequest: RequestHandler;
   readonly registerCommands: () => Promise<void>;
+  /* Cron: expired file links and stale uploads (secret-files AC-3.1). */
+  readonly sweepFiles: () => Promise<void>;
 };
 
 type ExecutionContext = { readonly waitUntil: (promise: Promise<unknown>) => void };
+
+type ScheduledController = { readonly cron: string };
 
 let cachedApp: App | undefined;
 /* Telegram stores the command menu server-side, so registering it once per
@@ -62,6 +73,14 @@ const createApp = (env: WorkerEnv): App => {
     buildLinkUrl: (token) => `${webAuthn.origin}${LINK_PATH_PREFIX}${token}`,
     linkTtlMinutes,
   });
+  const files = createFileSharingService({
+    objects: createR2FileObjectStore(env.FILES),
+    links: createD1FileLinkStore({ database: env.DB, now, createToken }),
+    ttlMinutesFor: sharing.getTtlMinutes,
+    buildLinkUrl: (token) => `${webAuthn.origin}${LINK_PATH_PREFIX}${token}`,
+    createToken,
+    now,
+  });
   const tokens = createD1ApiTokenStore({ database: env.DB, now });
   const telegramLinks = createD1TelegramLinkStore(env.DB);
   const enrollments = createD1EnrollmentStore({ database: env.DB, now });
@@ -75,6 +94,8 @@ const createApp = (env: WorkerEnv): App => {
     telegramLinks,
     deviceLogin,
     enrollmentIssuer: createEnrollmentIssuer(enrollments, webAuthn.origin, now),
+    files,
+    downloadFile: createTelegramFileDownloader(env.BOT_TOKEN),
   });
   const registerCommands = async (): Promise<void> => {
     try {
@@ -90,6 +111,7 @@ const createApp = (env: WorkerEnv): App => {
     handleRequest: createAppRequestHandler({
       api: createApiRequestHandler({
         sharing,
+        files,
         tokens,
         accounts: createD1AccountStore(env.DB),
         passkeys: createD1PasskeyStore(env.DB),
@@ -107,9 +129,10 @@ const createApp = (env: WorkerEnv): App => {
         siteOrigin: webAuthn.origin,
         now,
       }),
-      links: createLinkRequestHandler(links),
+      links: createLinkRequestHandler({ links, files }),
     }),
     registerCommands,
+    sweepFiles: files.sweep,
   };
 };
 
@@ -124,6 +147,10 @@ export default {
     if (request.method === 'POST' && url.pathname === WEBHOOK_PATH) {
       return app.handleWebhook(request);
     }
-    return app.handleRequest(request);
+    return app.handleRequest(request, (work) => ctx.waitUntil(work));
+  },
+  scheduled: async (_controller: ScheduledController, env: WorkerEnv, ctx: ExecutionContext): Promise<void> => {
+    const app = (cachedApp ??= createApp(env));
+    ctx.waitUntil(app.sweepFiles());
   },
 };

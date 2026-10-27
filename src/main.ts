@@ -2,6 +2,7 @@ import { loadConfig } from './config/load-config.ts';
 import { createLocalApp } from './features/app/create-local-app.ts';
 import { BOT_COMMANDS, createBot } from './features/bot/create-bot.ts';
 import { createPendingSetStore } from './features/bot/create-pending-set-store.ts';
+import { createTelegramFileDownloader } from './features/bot/create-telegram-file-downloader.ts';
 import site from './web/index.html';
 
 const config = loadConfig(Bun.env);
@@ -11,7 +12,7 @@ const app = createLocalApp(config);
 const server = Bun.serve({
   port: config.port,
   routes: { '/': site },
-  fetch: app.handleRequest,
+  fetch: (request) => app.handleRequest(request),
 });
 
 const bot = createBot({
@@ -22,6 +23,8 @@ const bot = createBot({
   telegramLinks: app.telegramLinks,
   deviceLogin: app.deviceLogin,
   enrollmentIssuer: app.enrollmentIssuer,
+  files: app.files,
+  downloadFile: createTelegramFileDownloader(config.botToken),
 });
 
 const shutdown = async (signal: string): Promise<void> => {

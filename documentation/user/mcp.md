@@ -52,8 +52,28 @@ Opening the link shows a confirmation page; the secret appears only after
 **Reveal secret**, so link previews cannot burn it. Afterwards the url answers
 `410 Gone`.
 
+## Files
+
+Two more tools cover secret files (key files, certificates, `.env` files, dumps):
+
+| Tool                        | Arguments              | Result                                              |
+| --------------------------- | ---------------------- | --------------------------------------------------- |
+| `create_one_time_file_link` | `path`, `ttlMinutes`   | the link lines plus `File: name (size)`; structured `url`, `curl`, `ttlMinutes`, `expiresAt`, `fileName`, `sizeBytes` |
+| `fetch_one_time_link`       | `url`, `outPath`       | where the content went: `path`, `kind` (`text` / `file`), `name`, `sizeBytes` |
+
+`create_one_time_file_link` reads the local file (up to 100 MiB) and uploads it
+as an anonymous drop; the `curl` line is `curl -X POST -OJ <link>`, which saves
+the file under its own name. `fetch_one_time_link` opens a link you give the
+assistant (text or file) straight into `outPath`, which must not exist yet. The
+content never enters the conversation: the tool returns only the metadata, and
+the server instructions tell the assistant not to read the file back unless you
+ask. Relative paths start at the folder the MCP server runs in; the result shows
+the absolute path.
+
 ## Limits
 
 The endpoint behind the tool (`POST /api/drops`) is public, so it is bounded:
 30 drops per minute per address, 16 KiB per value, at most one day of life. The
 value is kept only until the link is opened or expires.
+File drops (`POST /api/file-drops`) have their own limit of 30 per minute per
+address, files of at most 100 MiB and the same one-day maximum lifetime.

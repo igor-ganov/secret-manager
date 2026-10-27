@@ -9,9 +9,12 @@ const links = createOneTimeLinkStore({
   createToken,
 });
 
+/* Text links only: no file is ever stored here. */
+const handleLink = createLinkRequestHandler({ links, files: { peek: async () => undefined, open: async () => undefined } });
+
 const server = Bun.serve({
   port: 0,
-  fetch: createLinkRequestHandler(links),
+  fetch: (request: Request) => handleLink(request),
 });
 
 afterAll(() => server.stop(true));

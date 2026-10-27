@@ -13,7 +13,7 @@ const app = createLocalApp(config);
 const server = Bun.serve({
   port: config.port,
   routes: { '/': site },
-  fetch: app.handleRequest,
+  fetch: (request) => app.handleRequest(request),
 });
 
 console.log(`Dev site listening on ${server.url}`);

@@ -88,3 +88,35 @@ CREATE TABLE IF NOT EXISTS telegram_links (
   account_id INTEGER NOT NULL,
   linked_at INTEGER NOT NULL
 );
+
+-- Secret files (specs/secret-files): bytes live in R2, these rows say where.
+CREATE TABLE IF NOT EXISTS file_uploads (
+  upload_id TEXT PRIMARY KEY,
+  multipart_id TEXT NOT NULL,
+  object_key TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  content_type TEXT NOT NULL,
+  ttl_minutes INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS file_uploads_expiry ON file_uploads (expires_at);
+
+CREATE TABLE IF NOT EXISTS file_upload_parts (
+  upload_id TEXT NOT NULL,
+  part_number INTEGER NOT NULL,
+  etag TEXT NOT NULL,
+  PRIMARY KEY (upload_id, part_number)
+);
+
+CREATE TABLE IF NOT EXISTS one_time_files (
+  token TEXT PRIMARY KEY,
+  object_key TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  content_type TEXT NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS one_time_files_expiry ON one_time_files (expires_at);

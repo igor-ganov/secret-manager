@@ -35,6 +35,18 @@ const actions: Actions = {
   logout: record('logout'),
   share: record('share'),
   drop: record('drop'),
+  pickFile: (file, draft) => {
+    calls.push(`pickFile:${file.name},${draft}`);
+  },
+  removeFile: () => {
+    calls.push('removeFile:');
+  },
+  dropFile: async (file, ttlMinutes) => {
+    calls.push(`dropFile:${file.name},${String(ttlMinutes)}`);
+  },
+  shareFile: async (file) => {
+    calls.push(`shareFile:${file.name}`);
+  },
   linkFor: record('linkFor'),
   setRowMode: (key, mode) => {
     calls.push(`setRowMode:${key},${mode}`);
@@ -146,5 +158,49 @@ describe('renderApp', () => {
     expect(workspace.textContent).toContain('Ada');
     expect(workspace.textContent).toContain('Devices');
     expect(workspace.querySelector('[role="alert"]')?.textContent).toBe('boom');
+  });
+});
+
+describe('secret files in the views (secret-files AC-4.1, AC-4.3, AC-8.1)', () => {
+  const anonymous = { ...initialState, session: { kind: 'anonymous' as const } };
+  const note = new File(['abc'], 'note.txt', { type: 'text/plain' });
+
+  test('the quick start offers a labelled file picker; picking hands over the file and the text typed so far', () => {
+    const home = container(renderApp(h, actions, anonymous));
+    const input = home.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(home.querySelector(`label[for="${input?.id ?? ''}"]`)?.textContent).toBe('Attach a file');
+    expect(home.querySelector('form')?.getAttribute('aria-labelledby')).toBe('quick-heading');
+    const secret = home.querySelector<HTMLTextAreaElement>('#quick-secret');
+    Object.defineProperty(secret, 'value', { value: 'typed' });
+    Object.defineProperty(input, 'files', { value: [note] });
+    input?.dispatchEvent(new Event('change'));
+    expect(calls.splice(0)).toEqual(['pickFile:note.txt,typed']);
+  });
+
+  test('a chosen file replaces the text field, is submitted with the lifetime and can be removed', () => {
+    const home = container(renderApp(h, actions, { ...anonymous, file: note, quickTtlMinutes: 15 }));
+    expect(home.querySelector('#quick-secret')).toBeNull();
+    expect(home.textContent).toContain('note.txt (3 B)');
+    home.querySelector('form')?.dispatchEvent(new Event('submit', { cancelable: true }));
+    expect(calls.splice(0)).toEqual(['dropFile:note.txt,15']);
+    [...home.querySelectorAll('button')].find((button) => button.textContent === 'Remove file')?.click();
+    expect(calls.splice(0)).toEqual(['removeFile:']);
+  });
+
+  test('signed in, the share form submits a chosen file instead of key and value', () => {
+    const workspace = container(renderApp(h, actions, { ...signedIn, file: note }));
+    expect(workspace.querySelector('#share-value')).toBeNull();
+    expect(workspace.querySelector('#share-key')).toBeNull();
+    workspace.querySelector('form')?.dispatchEvent(new Event('submit', { cancelable: true }));
+    expect(calls.splice(0)).toEqual(['shareFile:note.txt']);
+  });
+
+  test('an upload shows an accessible progress bar in the status region', () => {
+    const notice = renderNotice(h, actions, { kind: 'upload', name: 'a.bin', sent: 4, total: 8 });
+    const bar = notice.querySelector('progress');
+    expect(notice.getAttribute('role')).toBe('status');
+    expect(bar?.getAttribute('aria-label')).toBe('Uploading a.bin');
+    expect([bar?.getAttribute('value'), bar?.getAttribute('max')]).toEqual(['4', '8']);
+    expect(notice.textContent).toContain('Uploading a.bin: 50%');
   });
 });

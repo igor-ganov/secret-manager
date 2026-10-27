@@ -1,3 +1,4 @@
+import { formatFileSize } from '../secret-files/format-file-size.ts';
 import { escapeHtml } from './escape-html.ts';
 
 const renderPage = (title: string, body: string): string => `<!doctype html>
@@ -12,6 +13,7 @@ const renderPage = (title: string, body: string): string => `<!doctype html>
   main { max-width: 40rem; padding: 2rem; text-align: center; }
   pre { background: #222; padding: 1rem; border-radius: .5rem; white-space: pre-wrap; word-break: break-all; font-size: 1.1rem; user-select: all; }
   p { color: #999; }
+  p.file { color: #eee; font-size: 1.1rem; overflow-wrap: anywhere; }
   button { font: inherit; font-size: 1.1rem; padding: .75rem 2rem; border: 0; border-radius: .5rem; background: #2563eb; color: #fff; cursor: pointer; }
   button:hover { background: #1d4ed8; }
 </style>
@@ -37,4 +39,12 @@ export const renderGonePage = (): string =>
   renderPage(
     'Link expired',
     '<h1>Nothing here</h1><p>This link has already been used or has expired.</p>',
+  );
+
+/* A file link: name and size, and a POST form that starts the download
+   (secret-files AC-2.1). The name was validated on upload and is escaped. */
+export const renderFileConfirmPage = ({ name, size }: { readonly name: string; readonly size: number }): string =>
+  renderPage(
+    'One-time file',
+    `<h1>One-time file</h1><p class="file">${escapeHtml(name)} · ${formatFileSize(size)}</p><p>This link works exactly once. The file is deleted from the server as soon as the download starts.</p><form method="post"><button type="submit">Download file</button></form>`,
   );
