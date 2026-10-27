@@ -1,4 +1,5 @@
 import { createApiClient } from '../api/create-api-client.ts';
+import { createBytesSender } from '../api/create-bytes-sender.ts';
 import { createJsonRequester, type FetchFn } from '../api/create-json-requester.ts';
 import { describeBrowser } from '../auth/describe-browser.ts';
 import { createStore } from '../state/create-store.ts';
@@ -30,7 +31,7 @@ export const startApp = async (env: AppEnvironment): Promise<void> => {
   const store = createStore(initialState);
   const deviceName = describeBrowser(env.userAgent);
   const actions = createActions({
-    api: createApiClient(createJsonRequester(fetchFn)),
+    api: createApiClient(createJsonRequester(fetchFn), createBytesSender(fetchFn)),
     store,
     clipboard,
     clearHash: () => clearHash(history, location),

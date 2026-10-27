@@ -11,6 +11,7 @@ export const initialState: AppState = {
   linkInfo: undefined,
   quickDraft: '',
   quickTtlMinutes: 5,
+  file: undefined,
   notice: { kind: 'idle' },
   error: undefined,
   toast: '',

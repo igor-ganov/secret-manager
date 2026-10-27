@@ -9,12 +9,15 @@ import { decodeMe } from '../../features/http-api/decoders/decode-me.ts';
 import { decodeSettings } from '../../features/http-api/decoders/decode-settings.ts';
 import { decodeSignedIn } from '../../features/http-api/decoders/decode-signed-in.ts';
 import type { ApiClient } from './api-client.ts';
+import type { BytesSender } from './create-bytes-sender.ts';
+import { createFileApi } from './create-file-api.ts';
 import type { JsonRequester } from './create-json-requester.ts';
 
 const enc = encodeURIComponent;
 const secretPath = (key: string): string => `/api/secrets/${enc(key)}`;
 
-export const createApiClient = (request: JsonRequester): ApiClient => ({
+export const createApiClient = (request: JsonRequester, sendBytes: BytesSender): ApiClient => ({
+  ...createFileApi(request, sendBytes),
   me: () => request('GET', '/api/me', decodeMe),
   logout: () => request('POST', '/api/auth/logout', decodeEmpty),
   keys: () => request('GET', '/api/secrets', decodeKeys),
