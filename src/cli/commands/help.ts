@@ -13,7 +13,10 @@ export const createHelp = (commands: () => readonly Command[]): Command => ({
   usage: 'help',
   description: 'Show this list',
   run: async ({ io }) => {
-    const rows = [...commands().map((command) => [command.usage, command.description]), ['exit', 'Leave the interactive session']];
+    const rows = [
+      ...commands().flatMap((command) => [command, ...(command.variants ?? [])].map(({ usage, description }) => [usage, description])),
+      ['exit', 'Leave the interactive session'],
+    ];
     const width = Math.max(...rows.map(([usage]) => usage?.length ?? 0));
     HELP_LINES.forEach((line) => io.print(line));
     rows.forEach(([usage, description]) => io.print(`  ${(usage ?? '').padEnd(width)}  ${description}`));

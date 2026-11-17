@@ -21,12 +21,17 @@ import type { PasskeyCeremonies } from '../passkeys/passkey-ceremonies.ts';
 import { webAuthnConfigFromUrl } from '../passkeys/webauthn-config.ts';
 import { createSecretStore } from '../secrets/create-secret-store.ts';
 import { createSettingsStore } from '../settings/create-settings-store.ts';
+import { createFileLinkStore } from '../secret-files/create-file-link-store.ts';
+import { createFileSharingService } from '../secret-files/create-file-sharing-service.ts';
+import { createMemoryFileObjectStore } from '../secret-files/create-memory-file-object-store.ts';
+import type { FileSharingService } from '../secret-files/file-sharing-service.ts';
 import { createSharingService } from '../sharing/create-sharing-service.ts';
 import type { SharingService } from '../sharing/sharing-service.ts';
 import { createAppRequestHandler, type RequestHandler } from './create-app-request-handler.ts';
 
 export type LocalApp = {
   readonly sharing: SharingService;
+  readonly files: FileSharingService;
   readonly tokens: ApiTokenStore;
   readonly accounts: AccountStore;
   readonly telegramLinks: TelegramLinkStore;
@@ -56,6 +61,15 @@ export const createLocalApp = (config: AppConfig, { ceremonies }: LocalAppOption
     buildLinkUrl: (token) => `${config.baseUrl}${LINK_PATH_PREFIX}${token}`,
     linkTtlMinutes: config.linkTtlMinutes,
   });
+  /* Files stay in memory locally, like text links: a restart forgets them. */
+  const files = createFileSharingService({
+    objects: createMemoryFileObjectStore({ createToken }),
+    links: createFileLinkStore({ now, createToken }),
+    ttlMinutesFor: sharing.getTtlMinutes,
+    buildLinkUrl: (token) => `${config.baseUrl}${LINK_PATH_PREFIX}${token}`,
+    createToken,
+    now,
+  });
   const tokens = createApiTokenStore({ databasePath: path, now });
   const accounts = createAccountStore(path);
   const telegramLinks = createTelegramLinkStore(path);
@@ -69,6 +83,7 @@ export const createLocalApp = (config: AppConfig, { ceremonies }: LocalAppOption
   const handleRequest = createAppRequestHandler({
     api: createApiRequestHandler({
       sharing,
+      files,
       tokens,
       accounts,
       passkeys: createPasskeyStore(path),
@@ -83,10 +98,11 @@ export const createLocalApp = (config: AppConfig, { ceremonies }: LocalAppOption
       siteOrigin: webAuthn.origin,
       now,
     }),
-    links: createLinkRequestHandler(links),
+    links: createLinkRequestHandler({ links, files }),
   });
   return {
     sharing,
+    files,
     tokens,
     accounts,
     telegramLinks,

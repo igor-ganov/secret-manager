@@ -3,6 +3,11 @@ import type { BotCommand, UserFromGetMe } from 'grammy/types';
 import type { DeviceLogin } from '../device-login/create-device-login.ts';
 import type { TelegramLinkStore } from '../device-login/telegram-link-store.ts';
 import type { EnrollmentIssuer } from '../http-api/enrollment-routes.ts';
+import { isValidFileName } from '../secret-files/file-limits.ts';
+import type { FileSharingService } from '../secret-files/file-sharing-service.ts';
+import { formatFileSize } from '../secret-files/format-file-size.ts';
+import type { Bytes } from '../secret-files/upload-in-parts.ts';
+import { buildFileCurlSnippet } from '../sharing/build-file-curl-snippet.ts';
 import { isValidKey } from '../sharing/is-valid-key.ts';
 import type { IssuedLink, SharingService } from '../sharing/sharing-service.ts';
 import { buildLinkMessage, type LinkMessage } from './build-link-message.ts';
@@ -35,6 +40,10 @@ export type BotDependencies = {
   readonly telegramLinks: TelegramLinkStore;
   readonly deviceLogin: DeviceLogin;
   readonly enrollmentIssuer: EnrollmentIssuer;
+  /* Documents sent to the bot become one-time file links (secret-files US-7). */
+  readonly files: Pick<FileSharingService, 'shareBytes'>;
+  /* Downloads what getFile resolved; injected so tests stay offline. */
+  readonly downloadFile: (filePath: string) => Promise<Bytes>;
   /* Supplying a known bot identity skips the getMe call; production omits it
      (grammY initializes lazily), tests pass it to drive updates offline. */
   readonly botInfo?: UserFromGetMe;
@@ -45,10 +54,22 @@ const HELP_TEXT = [
   'Send me a single `value` — I will reply with a one-time link without saving anything.',
   `Every link lives ${'%TTL%'} minutes by default and can be opened exactly once.`,
   'For your safety, I delete your message right after reading it, so the secret never lingers in this chat.',
+  'Send me a file (as a document, up to 20 MB) — I will reply with a link that downloads it once.',
   'Use /list to manage your saved keys.',
   'Use /settings to change how long links stay valid.',
   'Use /device to add a passkey on another device, /logout to unlink this chat.',
 ].join('\n');
+
+/* The Bot API lets a bot download files of at most 20 MB (getFile). */
+export const TELEGRAM_FILE_MAX_BYTES = 20 * 1000 * 1000;
+
+const FILE_TOO_LARGE_TEXT = [
+  'I can only take files of up to 20 MB: that is all Telegram lets a bot download.',
+  'Send larger files (up to 100 MiB) from the web site or the console utility: secret share --file <path>.',
+  'I deleted your message so the file does not linger in this chat.',
+].join('\n');
+
+const FILE_FAILED_TEXT = 'I could not store this file. Try again, or send it from the web site.';
 
 const LOGIN_TEXT = 'This chat is not linked to an account yet. Open the link, sign in with your passkey and approve it:';
 
@@ -60,6 +81,8 @@ export const createBot = ({
   telegramLinks,
   deviceLogin,
   enrollmentIssuer,
+  files,
+  downloadFile,
   botInfo,
 }: BotDependencies): Bot => {
   const bot = new Bot(token, botInfo ? { botInfo } : undefined);
@@ -198,6 +221,39 @@ export const createBot = ({
       }
       case 'empty':
         return;
+    }
+  });
+
+  /* A document becomes a one-time file link under the account's lifetime
+     (secret-files AC-7.1); the incoming message holding it is deleted in
+     every case, like a text secret. */
+  const shareDocument = async (ctx: Filter<Context, 'message:document'>, owner: number): Promise<void> => {
+    const { document } = ctx.message;
+    if ((document.file_size ?? 0) > TELEGRAM_FILE_MAX_BYTES) {
+      await ctx.reply(FILE_TOO_LARGE_TEXT);
+      return;
+    }
+    const name = document.file_name !== undefined && isValidFileName(document.file_name) ? document.file_name : 'file';
+    const { file_path: filePath } = await ctx.getFile();
+    const bytes = filePath === undefined ? undefined : await downloadFile(filePath);
+    const shared = bytes === undefined ? undefined : await files.shareBytes(owner, { name, contentType: document.mime_type ?? '' }, bytes);
+    if (bytes === undefined || shared === undefined || !shared.ok) {
+      await ctx.reply(FILE_FAILED_TEXT);
+      return;
+    }
+    const intro = `One-time link to “${name}” (${formatFileSize(bytes.byteLength)}, nothing was saved):`;
+    const { text, entities } = buildLinkMessage(intro, shared.value.url, shared.value.ttlMinutes, buildFileCurlSnippet);
+    await ctx.reply(text, { entities: [...entities] });
+  };
+
+  bot.on('message:document', async (ctx) => {
+    const owner = await requireOwner(ctx);
+    try {
+      if (owner !== undefined) {
+        await shareDocument(ctx, owner);
+      }
+    } finally {
+      await purgeIncoming(ctx);
     }
   });
 

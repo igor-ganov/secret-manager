@@ -1,7 +1,9 @@
 import type { ApiClient, ApiCredentials, PublicClient } from '../api/api-client.ts';
 import type { ConfigStore } from '../config/create-config-store.ts';
+import type { LinkClient } from '../api/link-client.ts';
 import type { ConsoleIo } from '../io/console-io.ts';
 import type { CallbackListener } from '../io/create-callback-listener.ts';
+import type { LocalFiles } from '../io/local-files.ts';
 import type { Outcome } from '../outcome.ts';
 
 export type CommandContext = {
@@ -18,11 +20,18 @@ export type CommandContext = {
   readonly listen: () => CallbackListener;
   readonly openBrowser: (url: string) => Promise<boolean>;
   readonly now: () => number;
+  /* Secret files: the disk, one-time links by url, and whether standard
+     output is a terminal (a text secret is never printed onto one). */
+  readonly files: LocalFiles;
+  readonly links: LinkClient;
+  readonly stdoutIsTerminal: boolean;
 };
 
 export type Command = {
   readonly name: string;
   readonly usage: string;
   readonly description: string;
+  /* Further forms of the same command, listed by help on their own rows. */
+  readonly variants?: readonly { readonly usage: string; readonly description: string }[];
   readonly run: (context: CommandContext, args: readonly string[]) => Promise<Outcome>;
 };

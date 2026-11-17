@@ -1,6 +1,9 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { mkdtemp, open, readFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 /* Locator contract with src/web (labels and headings are the UI's public API). */
 const UI = {
@@ -309,5 +312,131 @@ test.describe('quick start (web-quick-start)', () => {
     await expect(page.getByRole('button', { name: UI.quick.submit })).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page.getByRole('status')).toContainText('/s/');
+  });
+});
+
+/* Locators of the file feature (secret-files design §6). */
+const FILES = {
+  pick: 'Attach a file',
+  remove: 'Remove file',
+  progress: /^Uploading /,
+  download: 'Download file',
+  quickForm: 'Quick start',
+} as const;
+
+const MIB = 1024 * 1024;
+/* Two parts: 8 MiB and the rest, so the multi-part path runs end to end. */
+const twoPartFile = (): Buffer => {
+  const content = Buffer.alloc(9 * MIB, 7);
+  content.write('first-part', 0);
+  content.write('last-part', 9 * MIB - 9);
+  return content;
+};
+
+test.describe('secret files (secret-files)', () => {
+  test('a visitor uploads a file in parts with progress; the link downloads it once under its own name (AC-2.1–2.3, AC-4.1, AC-4.3)', async ({ page, browser, request }) => {
+    const content = twoPartFile();
+    await page.goto('/');
+    await page.getByLabel(FILES.pick).setInputFiles({ name: 'backup.bin', mimeType: 'application/octet-stream', buffer: content });
+    await expect(page.getByText('backup.bin (9.0 MiB)')).toBeVisible();
+    /* The file replaces the text field until it is removed. */
+    await expect(page.getByLabel(UI.quick.secret, { exact: true })).toHaveCount(0);
+    await page.getByRole('radiogroup', { name: UI.quick.lifetime }).getByRole('radio', { name: '15 min', exact: true }).check();
+
+    /* Hold the second part until the first one shows up in the progress bar. */
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route('**/parts/2', async (route) => {
+      await gate;
+      await route.continue();
+    });
+    await page.getByRole('button', { name: UI.quick.submit }).click();
+    const bar = page.getByRole('status').getByRole('progressbar', { name: FILES.progress });
+    await expect(bar).toHaveAttribute('value', String(8 * MIB));
+    await expect(bar).toHaveAttribute('max', String(9 * MIB));
+    release();
+
+    const result = page.getByRole('status');
+    await expect(result).toContainText('Valid for 15 minutes, opens once.');
+    await expect(result).toContainText('curl -X POST -OJ');
+    await expect(page.getByText('backup.bin (9.0 MiB)')).toHaveCount(0);
+    const url = (await result.locator('pre').first().textContent()) ?? '';
+    expect(url).toContain('/s/');
+
+    const recipient = await (await browser.newContext()).newPage();
+    await recipient.goto(url);
+    await expect(recipient.getByText('backup.bin')).toBeVisible();
+    await expect(recipient.getByText('9.0 MiB')).toBeVisible();
+    const downloading = recipient.waitForEvent('download');
+    await recipient.getByRole('button', { name: FILES.download }).click();
+    const download = await downloading;
+    expect(download.suggestedFilename()).toBe('backup.bin');
+    const saved = await download.path();
+    const received = await readFile(saved);
+    expect(received.equals(content)).toBe(true);
+    expect((await request.post(url)).status()).toBe(410);
+  });
+
+  test('a file dropped onto the form becomes the secret (AC-4.1)', async ({ page, request }) => {
+    await page.goto('/');
+    const dataTransfer = await page.evaluateHandle(() => {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File(['dropped-content'], 'dropped.txt', { type: 'text/plain' }));
+      return transfer;
+    });
+    await page.getByRole('form', { name: FILES.quickForm }).dispatchEvent('drop', { dataTransfer });
+    await expect(page.getByText('dropped.txt (15 B)')).toBeVisible();
+    await page.getByRole('button', { name: UI.quick.submit }).click();
+    const url = (await page.getByRole('status').locator('pre').first().textContent()) ?? '';
+    const opened = await request.post(url);
+    expect(opened.headers()['content-disposition']).toContain('filename="dropped.txt"');
+    expect(await opened.text()).toBe('dropped-content');
+  });
+
+  test('a file over 100 MiB is refused before any request; Remove file brings the text field back (AC-4.1, AC-4.2)', async ({ page }) => {
+    const folder = await mkdtemp(join(tmpdir(), 'secret-e2e-'));
+    const path = join(folder, 'huge.iso');
+    /* Sparse: 100 MiB + 1 byte without writing them. */
+    const handle = await open(path, 'w');
+    await handle.truncate(100 * MIB + 1);
+    await handle.close();
+    const uploads: string[] = [];
+    page.on('request', (sent) => {
+      uploads.push(...(sent.url().includes('/api/file') ? [sent.url()] : []));
+    });
+    await page.goto('/');
+    await page.getByLabel(FILES.pick).setInputFiles(path);
+    await expect(page.getByRole('alert')).toContainText('larger than 100 MiB');
+    await expect(page.getByText('huge.iso')).toHaveCount(0);
+    await page.getByLabel(FILES.pick).setInputFiles({ name: 'small.txt', mimeType: 'text/plain', buffer: Buffer.from('x') });
+    await page.getByRole('button', { name: FILES.remove }).click();
+    await expect(page.getByLabel(UI.quick.secret, { exact: true })).toBeVisible();
+    expect(uploads).toEqual([]);
+    await rm(folder, { recursive: true });
+  });
+
+  test('a failed upload is aborted, the error shown and the file kept (AC-4.4)', async ({ page }) => {
+    await page.goto('/');
+    await page.route('**/complete', (route) => route.fulfill({ status: 500, json: { error: 'Storage is unavailable.' } }));
+    const aborted = page.waitForRequest((sent) => sent.method() === 'DELETE' && sent.url().includes('/api/uploads/'));
+    await page.getByLabel(FILES.pick).setInputFiles({ name: 'keep.txt', mimeType: 'text/plain', buffer: Buffer.from('keep me') });
+    await page.getByRole('button', { name: UI.quick.submit }).click();
+    await aborted;
+    await expect(page.getByRole('alert')).toContainText('Storage is unavailable.');
+    await expect(page.getByText('keep.txt (7 B)')).toBeVisible();
+  });
+
+  test('a signed-in user shares a file under the account lifetime (AC-4.1, AC-4.3)', async ({ page, request }) => {
+    await signUp(page);
+    await page.getByLabel(FILES.pick).setInputFiles({ name: 'id_ed25519', mimeType: 'application/octet-stream', buffer: Buffer.from('private-key') });
+    await expect(page.getByLabel(UI.share.value, { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: UI.share.submit }).click();
+    const result = page.getByRole('status');
+    await expect(result).toContainText('Valid for 5 minutes, opens once.');
+    const url = (await result.locator('pre').first().textContent()) ?? '';
+    expect(await (await request.post(url)).text()).toBe('private-key');
+    await expect(page.getByText(UI.keys.empty)).toBeVisible();
   });
 });

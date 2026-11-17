@@ -8,6 +8,7 @@ import type { EnrollmentStore } from '../enrollment/enrollment-store.ts';
 import type { ChallengeStore } from '../passkeys/challenge-store.ts';
 import type { PasskeyCeremonies } from '../passkeys/passkey-ceremonies.ts';
 import type { PasskeyStore } from '../passkeys/passkey-store.ts';
+import type { FileSharingService } from '../secret-files/file-sharing-service.ts';
 import type { SharingService } from '../sharing/sharing-service.ts';
 import { createAuthRoutes } from './auth-routes.ts';
 import { createAuthenticator, isCrossSiteMutation } from './authenticate.ts';
@@ -16,6 +17,7 @@ import { createDeviceRoutes } from './device-routes.ts';
 import { createDevicesRoutes } from './devices-routes.ts';
 import { createDropRoutes } from './drop-routes.ts';
 import { createEnrollmentRoutes } from './enrollment-routes.ts';
+import { createFileRoutes } from './file-routes.ts';
 import { errorResponse, forbidden, notFound, unauthorized } from './json-response.ts';
 import { matchPath } from './match-path.ts';
 import { createPasskeyRoutes } from './passkey-routes.ts';
@@ -30,6 +32,7 @@ export const API_PATH_PREFIX = '/api/';
 
 export type ApiDependencies = {
   readonly sharing: SharingService;
+  readonly files: FileSharingService;
   readonly tokens: ApiTokenStore;
   readonly accounts: AccountStore;
   readonly passkeys: PasskeyStore;
@@ -77,6 +80,7 @@ export const createApiRequestHandler = (deps: ApiDependencies) => {
     ...createDevicesRoutes(deps),
     ...createSecretRoutes(deps.sharing),
     ...createDropRoutes(deps.sharing),
+    ...createFileRoutes(deps.files),
     ...createSettingsRoutes(deps.sharing),
   ];
 

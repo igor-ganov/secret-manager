@@ -1,5 +1,6 @@
 import { homedir, hostname } from 'node:os';
 import { createApiClient, createPublicClient } from './api/create-api-client.ts';
+import { createLinkClient } from './api/create-link-client.ts';
 import type { CommandContext } from './commands/command.ts';
 import { createConfigStore } from './config/create-config-store.ts';
 import { resolveConfigPath } from './config/resolve-config-path.ts';
@@ -9,6 +10,7 @@ import { createCallbackListener } from './io/create-callback-listener.ts';
 import { createConsoleIo } from './io/create-console-io.ts';
 import { createLineIo } from './io/create-line-io.ts';
 import { createLineReader } from './io/create-line-reader.ts';
+import { createLocalFiles } from './io/create-local-files.ts';
 import { openBrowser } from './io/open-browser.ts';
 import { runMcp } from './mcp/run-mcp.ts';
 import { runCommand } from './run-command.ts';
@@ -34,6 +36,9 @@ const headless: Omit<CommandContext, 'io'> = {
   /* SECRET_MANAGER_NO_BROWSER keeps tests and headless boxes from launching one. */
   openBrowser: (url) => (process.env['SECRET_MANAGER_NO_BROWSER'] === undefined ? openBrowser(url) : Promise.resolve(false)),
   now: Date.now,
+  files: createLocalFiles(() => process.cwd()),
+  links: createLinkClient(fetchFn),
+  stdoutIsTerminal: process.stdout.isTTY === true,
 };
 
 const run = async (argv: readonly string[]): Promise<number> => {

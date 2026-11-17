@@ -4,6 +4,7 @@ import type { H } from './h.ts';
 import { renderEnrollmentNotice } from './render-enrollment-notice.ts';
 import { renderLinkResult } from './render-link-result.ts';
 import { renderRecoveryNotice } from './render-recovery-notice.ts';
+import { renderUploadProgress } from './render-upload-progress.ts';
 
 const content = (h: H, actions: Actions, notice: Notice): readonly Node[] => {
   switch (notice.kind) {
@@ -17,6 +18,8 @@ const content = (h: H, actions: Actions, notice: Notice): readonly Node[] => {
       return renderRecoveryNotice(h, actions, notice.code);
     case 'enrollment':
       return renderEnrollmentNotice(h, actions, notice.enrollment);
+    case 'upload':
+      return renderUploadProgress(h, notice);
   }
 };
 
@@ -28,6 +31,7 @@ const className = (notice: Notice): string => {
     case 'link':
     case 'recovery':
     case 'enrollment':
+    case 'upload':
       return 'notice';
   }
 };

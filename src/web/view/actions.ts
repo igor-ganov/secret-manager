@@ -17,6 +17,11 @@ export type Actions = {
   /* The quick start: an anonymous one-time link with the chosen lifetime. */
   readonly drop: (value: string, ttlMinutes: number) => Promise<void>;
   readonly linkFor: (key: string) => Promise<void>;
+  /* Secret files: choose (checked against 100 MiB), forget, send. */
+  readonly pickFile: (file: File, draft: string) => void;
+  readonly removeFile: () => void;
+  readonly dropFile: (file: File, ttlMinutes: number) => Promise<void>;
+  readonly shareFile: (file: File) => Promise<void>;
   readonly setRowMode: (key: string, mode: RowMode) => void;
   readonly saveValue: (key: string, value: string) => Promise<void>;
   readonly confirmDelete: (key: string) => Promise<void>;

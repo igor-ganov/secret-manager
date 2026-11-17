@@ -30,7 +30,7 @@ export const renderWorkspace = (
   ...renderError(h, state.error),
   renderNotice(h, actions, state.notice),
   h('p', { attrs: { class: 'toast', 'aria-live': 'polite' } }, state.toast),
-  renderShareForm(h, actions),
+  renderShareForm(h, actions, state.file),
   renderKeys(h, actions, state.keys, state.rowModes),
   renderSettings(h, actions, state.settings),
   renderDevices(h, actions, state.devices, deviceName),

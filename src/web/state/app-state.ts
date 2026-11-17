@@ -28,7 +28,9 @@ export type Notice =
   | { readonly kind: 'info'; readonly text: string }
   | { readonly kind: 'link'; readonly intro: string; readonly link: IssuedLinkResponse }
   | { readonly kind: 'recovery'; readonly code: string }
-  | { readonly kind: 'enrollment'; readonly enrollment: EnrollmentResponse };
+  | { readonly kind: 'enrollment'; readonly enrollment: EnrollmentResponse }
+  /* A file going up in parts (secret-files AC-4.3). */
+  | { readonly kind: 'upload'; readonly name: string; readonly sent: number; readonly total: number };
 
 export type AppState = {
   readonly session: Session;
@@ -43,6 +45,9 @@ export type AppState = {
      so the full re-render does not wipe it; the lifetime is kept between drops. */
   readonly quickDraft: string;
   readonly quickTtlMinutes: number;
+  /* The chosen secret file: a file input cannot be refilled after the full
+     re-render, so the state holds it and the input only picks (secret-files §6). */
+  readonly file: File | undefined;
   readonly notice: Notice;
   readonly error: string | undefined;
   readonly toast: string;

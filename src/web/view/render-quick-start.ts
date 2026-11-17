@@ -1,15 +1,22 @@
 import { TTL_PRESETS_MINUTES } from '../../features/settings/ttl-presets.ts';
 import type { Actions } from './actions.ts';
+import { fileDropHandlers } from './file-drop-handlers.ts';
 import type { H } from './h.ts';
 import { onSubmit } from './on-submit.ts';
-import { readFormField } from './read-form-field.ts';
+import { filePickerUnless, quickFields, quickSubmit } from './quick-fields.ts';
 import { renderTtlChoices } from './render-ttl-choices.ts';
 
-const LEAD = 'Paste a secret, get a link that opens once. Nothing is stored and no account is needed.';
+const LEAD = 'Paste a secret or attach a file, get a link that opens once. Nothing is stored and no account is needed.';
 
-/* The front page (web-quick-start AC-1.1): the draft comes from the state so a
-   failed drop re-renders with the text still in place. */
-export const renderQuickStart = (h: H, actions: Actions, draft: string, ttlMinutes: number): HTMLElement =>
+export type QuickStartProps = {
+  readonly draft: string;
+  readonly ttlMinutes: number;
+  readonly file: File | undefined;
+};
+
+/* The front page (web-quick-start AC-1.1, secret-files AC-4.1): the draft and
+   the chosen file come from the state, so a re-render keeps both. */
+export const renderQuickStart = (h: H, actions: Actions, { draft, ttlMinutes, file }: QuickStartProps): HTMLElement =>
   h(
     'section',
     { attrs: { 'aria-labelledby': 'quick-heading' } },
@@ -17,20 +24,10 @@ export const renderQuickStart = (h: H, actions: Actions, draft: string, ttlMinut
     h('p', { attrs: { class: 'muted' } }, LEAD),
     h(
       'form',
-      {
-        on: {
-          submit: onSubmit((event) =>
-            void actions.drop(readFormField(event, 'secret'), Number(readFormField(event, 'ttl'))),
-          ),
-        },
-      },
-      h('label', { attrs: { for: 'quick-secret' } }, 'Secret'),
-      h(
-        'textarea',
-        { attrs: { id: 'quick-secret', name: 'secret', required: '', autocomplete: 'off', spellcheck: 'false', 'data-autofocus': '' } },
-        draft,
-      ),
+      { attrs: { 'aria-labelledby': 'quick-heading' }, on: { submit: onSubmit(quickSubmit(actions, file)), ...fileDropHandlers(actions) } },
+      ...quickFields(h, actions, draft, file),
       renderTtlChoices(h, { presets: TTL_PRESETS_MINUTES, current: ttlMinutes }),
       h('button', { attrs: { type: 'submit' } }, 'Get one-time link'),
+      ...filePickerUnless(h, actions, file),
     ),
   );

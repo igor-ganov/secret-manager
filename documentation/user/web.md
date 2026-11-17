@@ -20,6 +20,27 @@ once the link is opened or expired. If the server refuses the request (for
 example after too many links in a minute), the error is shown and your text stays
 in the field.
 
+## Files
+
+Below **Get one-time link** there is **Attach a file**; you can also drop a file
+anywhere on the form. Files of up to **100 MiB** are accepted (larger or empty
+ones are refused at once, before anything is sent). The chosen file is shown with
+its name and size and a **Remove file** button, and it replaces the text field.
+
+Press **Get one-time link**: the file goes up in parts with a progress bar, then
+you get the link, a `curl -X POST -OJ <link>` snippet and the lifetime, exactly
+like a text secret. If the upload fails, the error is shown, the partial upload is
+discarded on the server and the file stays chosen, so you can press the button
+again.
+
+The recipient sees the file name and size and a **Download file** button; the
+download starts once, and the file is deleted from the server as it starts.
+Scripts download it with the `curl` snippet, which keeps the file name.
+
+Signed in, the **Share a secret** form takes files the same way; the link then
+lives as long as your **Settings** lifetime. Files are never saved to the
+account.
+
 ## Account (optional)
 
 Expand **Account (optional)** under the quick start. There is one button. Press

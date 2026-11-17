@@ -12,12 +12,13 @@ import type {
   SignedInResponse,
 } from '../../features/http-api/api-types.ts';
 import type { Result } from '../../features/result/result.ts';
+import type { FileApi } from './file-api.ts';
 
 type Options = Promise<Result<CeremonyOptionsResponse>>;
 type SignedIn = Promise<Result<SignedInResponse>>;
 type Done = Promise<Result<true>>;
 
-export type ApiClient = {
+export type ApiClient = FileApi & {
   readonly me: () => Promise<Result<MeResponse>>;
   readonly logout: () => Done;
   readonly keys: () => Promise<Result<KeysResponse>>;

@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import type { ApiClient, ApiCredentials, ApiResult, PublicClient } from './api/api-client.ts';
+import type { LinkClient } from './api/link-client.ts';
 import type { CommandContext } from './commands/command.ts';
 import { NOT_LOGGED_IN } from './commands/require-client.ts';
 import { TOKEN_REJECTED } from './commands/to-outcome.ts';
 import type { CliConfig } from './config/cli-config.ts';
 import type { ConsoleIo } from './io/console-io.ts';
+import type { LocalFiles } from './io/local-files.ts';
 import { runCommand } from './run-command.ts';
 import { runSession } from './run-session.ts';
 
@@ -23,6 +25,7 @@ type Harness = {
   readonly hiddenPrompts: string[];
   readonly calls: string[];
   readonly configFile: { value: CliConfig };
+  readonly disk: Map<string, Uint8Array<ArrayBuffer>>;
 };
 
 type HarnessOptions = {
@@ -33,11 +36,64 @@ type HarnessOptions = {
   readonly callbackGrant?: string;
   /* Milliseconds until the login request expires. */
   readonly ttlMs?: number;
+  readonly stdoutIsTerminal?: boolean;
 };
+
+const FILE_LINK = { url: 'https://s/s/f', curl: 'curl -X POST -OJ https://s/s/f', ttlMinutes: 5 };
+/* Parts of four bytes, so the nine-byte report goes up in three. */
+const TICKET = { uploadId: 'up', partSize: 4, partCount: 3, expiresAt: 0 };
+const HUGE = 100 * 1024 * 1024 + 1;
+const GONE = 'This link has already been used or has expired.';
+
+const encode = (text: string): Uint8Array<ArrayBuffer> => new TextEncoder().encode(text);
+
+/* A working folder `/work` in a Map; `huge.bin` exists by size only. */
+const fakeFiles = (disk: Map<string, Uint8Array<ArrayBuffer>>, calls: string[]): LocalFiles => {
+  const resolve = (path: string): string => (path.startsWith('/') ? path : `/work/${path}`);
+  return {
+    resolve,
+    stat: async (path) => {
+      const absolute = resolve(path);
+      const name = absolute.split('/').pop() ?? '';
+      const size = absolute === '/work/huge.bin' ? HUGE : disk.get(absolute)?.byteLength;
+      return size === undefined ? undefined : { name, size, contentType: 'application/pdf' };
+    },
+    readRange: async (path, start, end) => (disk.get(resolve(path)) ?? new Uint8Array()).slice(start, end),
+    exists: async (path) => disk.has(resolve(path)),
+    write: async (path, body) => {
+      const bytes = new Uint8Array(await new Response(body).arrayBuffer());
+      disk.set(resolve(path), bytes);
+      calls.push(`write:${resolve(path)}`);
+      return bytes.byteLength;
+    },
+    remove: async (path) => {
+      disk.delete(resolve(path));
+    },
+  };
+};
+
+/* https://s/s/file holds report.pdf, …/text a value, …/gone nothing. */
+const fakeLinks = (calls: string[]): LinkClient => ({
+  peek: async (url) => {
+    calls.push(`peek:${url}`);
+    switch (url) {
+      case 'https://s/s/file':
+        return ok({ kind: 'file', name: 'report.pdf', size: 4 });
+      case 'https://s/s/text':
+        return ok({ kind: 'text' });
+      default:
+        return { ok: false, error: { kind: 'rejected', message: GONE } };
+    }
+  },
+  open: async (url) => {
+    calls.push(`open:${url}`);
+    return url === 'https://s/s/text' ? ok({ kind: 'text', value: 'hunter2' }) : ok({ kind: 'file', body: new Response('data').body ?? new ReadableStream() });
+  },
+});
 
 const build = (
   answers: readonly string[],
-  { config = { serverUrl: 'https://s', token: 't' }, withoutDefaultServer = false, callbackGrant, ttlMs = 60_000 }: HarnessOptions = {},
+  { config = { serverUrl: 'https://s', token: 't' }, withoutDefaultServer = false, callbackGrant, ttlMs = 60_000, stdoutIsTerminal = false }: HarnessOptions = {},
 ): Harness => {
   const queue = [...answers];
   const out: string[] = [];
@@ -86,6 +142,10 @@ const build = (
       calls.push(`revoke:${id}`);
       return ok(true);
     },
+    beginFile: async (name, size, contentType) => {
+      calls.push(`beginFile:${name}:${String(size)}:${contentType}`);
+      return ok(TICKET);
+    },
   });
   const fakePublicClient = (serverUrl: string): PublicClient => ({
     start: async (label, callback) => {
@@ -102,7 +162,26 @@ const build = (
       calls.push(`drop:${value}:${String(ttlMinutes)}`);
       return ok(LINK);
     },
+    dropFile: async (name, size, contentType, ttlMinutes) => {
+      calls.push(`dropFile:${name}:${String(size)}:${contentType}:${String(ttlMinutes)}`);
+      return ok(TICKET);
+    },
+    putPart: async (uploadId, partNumber, bytes) => {
+      calls.push(`part:${uploadId}:${String(partNumber)}:${new TextDecoder().decode(bytes)}`);
+      return ok(true);
+    },
+    completeUpload: async (uploadId) => {
+      calls.push(`complete:${uploadId}`);
+      return ok(FILE_LINK);
+    },
+    abortUpload: async (uploadId) => {
+      calls.push(`abort:${uploadId}`);
+      return ok(true);
+    },
   });
+  const disk = new Map<string, Uint8Array<ArrayBuffer>>([['/work/report.pdf', encode('pdf-bytes')]]);
+  const files = fakeFiles(disk, calls);
+  const links = fakeLinks(calls);
   const context: CommandContext = {
     io,
     config: {
@@ -127,8 +206,11 @@ const build = (
       return true;
     },
     now: () => 1000,
+    files,
+    links,
+    stdoutIsTerminal,
   };
-  return { context, out, err, hiddenPrompts, calls, configFile, replaced, histories };
+  return { context, out, err, hiddenPrompts, calls, configFile, replaced, histories, disk };
 };
 
 describe('runCommand', () => {
@@ -272,5 +354,73 @@ describe('runSession (AC-1.1, AC-1.2)', () => {
   test('ends quietly at end of input', async () => {
     const { context } = build(['whoami']);
     expect(await runSession(context)).toBe(0);
+  });
+});
+
+describe('secret files (secret-files US-5)', () => {
+  test('share --file uploads in parts under the account, reports progress on stderr and prints the link (AC-5.1)', async () => {
+    const { context, out, err, calls } = build([]);
+    expect(await runCommand(context, ['share', '--file', 'report.pdf'])).toBe(0);
+    expect(calls).toEqual(['beginFile:report.pdf:9:application/pdf', 'part:up:1:pdf-', 'part:up:2:byte', 'part:up:3:s', 'complete:up']);
+    expect(out).toEqual([FILE_LINK.url, FILE_LINK.curl, 'Valid for 5 minutes, opens once.']);
+    expect(err).toEqual(['Uploading report.pdf: 0% of 9 B', 'Uploading report.pdf: 44% of 9 B', 'Uploading report.pdf: 88% of 9 B', 'Uploading report.pdf: 100% of 9 B']);
+  });
+
+  test('share --file refuses a missing, oversized or absent path before any request (AC-5.5)', async () => {
+    const { context, err, calls } = build([]);
+    expect(await runCommand(context, ['share', '--file', 'missing.txt'])).toBe(64);
+    expect(await runCommand(context, ['share', '--file', 'huge.bin'])).toBe(64);
+    expect(await runCommand(context, ['share', '--file'])).toBe(64);
+    expect(err).toEqual(['No such file: missing.txt', 'huge.bin is larger than 100 MiB.', 'Usage: share --file <path>']);
+    expect(calls).toEqual([]);
+  });
+
+  test('share with a value still shares text (AC-5.1)', async () => {
+    const { context, calls } = build([]);
+    expect(await runCommand(context, ['share', 'plain'])).toBe(0);
+    expect(calls).toEqual(['share::plain']);
+  });
+
+  test('fetch saves a file under its own name without overwriting what is there (AC-5.2)', async () => {
+    const { context, out, disk } = build([]);
+    disk.set('/work/report.pdf', encode('old'));
+    disk.set('/work/report (1).pdf', encode('older'));
+    expect(await runCommand(context, ['fetch', 'https://s/s/file'])).toBe(0);
+    expect(new TextDecoder().decode(disk.get('/work/report (2).pdf'))).toBe('data');
+    expect(new TextDecoder().decode(disk.get('/work/report.pdf'))).toBe('old');
+    expect(out).toEqual(['Saved report.pdf (4 B) to /work/report (2).pdf']);
+  });
+
+  test('fetch -o writes a file or a text value to the given path (AC-5.2)', async () => {
+    const { context, disk } = build([]);
+    expect(await runCommand(context, ['fetch', 'https://s/s/file', '-o', 'out.bin'])).toBe(0);
+    expect(new TextDecoder().decode(disk.get('/work/out.bin'))).toBe('data');
+    expect(await runCommand(context, ['fetch', 'https://s/s/text', '-o', 'pass.txt'])).toBe(0);
+    expect(new TextDecoder().decode(disk.get('/work/pass.txt'))).toBe('hunter2');
+  });
+
+  test('fetch prints a text value only into a pipe, never onto a terminal (AC-5.2, AC-5.3)', async () => {
+    const piped = build([]);
+    expect(await runCommand(piped.context, ['fetch', 'https://s/s/text'])).toBe(0);
+    expect(piped.out).toEqual(['hunter2']);
+    const terminal = build([], { stdoutIsTerminal: true });
+    expect(await runCommand(terminal.context, ['fetch', 'https://s/s/text'])).toBe(64);
+    expect(terminal.err[0]).toContain('-o <path>');
+    /* Refused before opening: the link is still valid. */
+    expect(terminal.calls).toEqual(['peek:https://s/s/text']);
+  });
+
+  test('fetch needs no login and reports a dead link with exit 1 (AC-5.4)', async () => {
+    const { context, err } = build([], { config: {} });
+    expect(await runCommand(context, ['fetch', 'https://s/s/gone'])).toBe(1);
+    expect(err).toEqual([GONE]);
+    expect(await runCommand(context, ['fetch'])).toBe(64);
+  });
+
+  test('help lists share --file and fetch (AC-5.4)', async () => {
+    const { context, out } = build([]);
+    await runCommand(context, ['help']);
+    expect(out.some((line) => line.includes('share --file <path>'))).toBe(true);
+    expect(out.some((line) => line.includes('fetch <link> [-o <path>]'))).toBe(true);
   });
 });

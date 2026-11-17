@@ -1,6 +1,9 @@
 import type { PublicClient } from '../api/api-client.ts';
+import type { LinkClient } from '../api/link-client.ts';
 import type { ConfigStore } from '../config/create-config-store.ts';
+import type { LocalFiles } from '../io/local-files.ts';
 import { EXIT } from '../outcome.ts';
+import { createMcpFileOperations } from './create-mcp-file-operations.ts';
 import { createMcpServer } from './create-mcp-server.ts';
 import { serveMcp } from './serve-mcp.ts';
 
@@ -12,6 +15,8 @@ export type McpContext = {
   readonly defaultServerUrl: string | undefined;
   readonly printError: (text: string) => void;
   readonly now: () => number;
+  readonly files: LocalFiles;
+  readonly links: LinkClient;
 };
 
 /* Argument → built-in / environment default → the url `login` stored; no
@@ -29,7 +34,7 @@ export const runMcp = async (context: McpContext, argument: string | undefined):
     context.printError(MCP_URL_REQUIRED);
     return EXIT.usage;
   }
-  const { drop } = context.createPublicClient(serverUrl);
-  await serveMcp(createMcpServer({ drop, now: context.now }));
+  const client = context.createPublicClient(serverUrl);
+  await serveMcp(createMcpServer({ drop: client.drop, ...createMcpFileOperations(client, context.files, context.links), now: context.now }));
   return EXIT.ok;
 };

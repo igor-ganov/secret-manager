@@ -12,7 +12,7 @@ const app = createLocalApp(
   { botToken: '1:integration', port: 0, baseUrl: 'http://127.0.0.1', databasePath: ':memory:', linkTtlMinutes: 5 },
   { ceremonies: createFakeCeremonies() },
 );
-const server = Bun.serve({ port: 0, fetch: app.handleRequest });
+const server = Bun.serve({ port: 0, fetch: (request) => app.handleRequest(request) });
 afterAll(() => server.stop(true));
 
 const ACCOUNT = 2 ** 40 + 9;
@@ -21,9 +21,11 @@ const { token: ownerToken } = await app.tokens.create(ACCOUNT, 'web');
 const configDir = await mkdtemp(join(tmpdir(), 'secret-cli-'));
 const configPath = join(configDir, 'config.json');
 
-const run = (args: readonly string[], input: string) => {
-  const proc = Bun.spawn(['bun', 'run', 'src/cli/main.ts', ...args], {
-    cwd: process.cwd(),
+const MAIN = join(process.cwd(), 'src/cli/main.ts');
+
+const run = (args: readonly string[], input: string, cwd = process.cwd()) => {
+  const proc = Bun.spawn(['bun', 'run', MAIN, ...args], {
+    cwd,
     stdin: new TextEncoder().encode(input),
     stdout: 'pipe',
     stderr: 'pipe',
@@ -93,5 +95,38 @@ describe('secret CLI over a pipe', () => {
     expect(await run(['get', 'api-key'], '').finished).toMatchObject({ stdout: 'piped-secret\n', code: 0 });
     expect(await run(['get', 'missing'], '').finished).toMatchObject({ stderr: 'No such key.\n', code: 1 });
     expect((await run(['nope'], '').finished).code).toBe(64);
+  });
+});
+
+describe('secret files through the utility (secret-files US-5)', () => {
+  test('share --file sends a multi-part file and fetch saves it once, under a free name', async () => {
+    const folder = await mkdtemp(join(tmpdir(), 'secret-files-'));
+    const source = join(folder, 'dump.bin');
+    const content = new Uint8Array(9 * 1024 * 1024).map((_, index) => index % 251);
+    await Bun.write(source, content);
+
+    const shared = await run(['share', '--file', source], '').finished;
+    expect(shared.code).toBe(0);
+    expect(shared.stderr).toContain('Uploading dump.bin: 100% of 9.0 MiB');
+    const [url = '', curl] = shared.stdout.trim().split('\n');
+    expect(curl).toBe(`curl -X POST -OJ ${url}`);
+
+    const fetched = await run(['fetch', url.replace('http://127.0.0.1', server.url.origin)], '', folder).finished;
+    const saved = join(folder, 'dump (1).bin');
+    expect(fetched).toMatchObject({ code: 0, stdout: `Saved dump.bin (9.0 MiB) to ${saved}\n` });
+    expect(Buffer.from(await Bun.file(saved).bytes()).equals(Buffer.from(content))).toBe(true);
+    const again = await run(['fetch', url.replace('http://127.0.0.1', server.url.origin)], '', folder).finished;
+    expect(again).toMatchObject({ code: 1, stderr: 'This link has already been used or has expired.\n' });
+  }, 30_000);
+
+  test('fetch pipes a text value and needs no login', async () => {
+    const dropped = await fetch(`${server.url.origin}/api/drops`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ value: 'piped-value', ttlMinutes: 5 }),
+    });
+    const { url } = await dropped.json();
+    const fetched = await run(['fetch', String(url).replace('http://127.0.0.1', server.url.origin)], '').finished;
+    expect(fetched).toMatchObject({ code: 0, stdout: 'piped-value\n' });
   });
 });

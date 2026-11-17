@@ -74,6 +74,8 @@ Inside the session or as arguments (`secret <command> …`):
 | Command               | Effect                                                        |
 | --------------------- | ------------------------------------------------------------- |
 | `share [value]`       | One-time link to a value that is not saved                    |
+| `share --file <path>` | One-time link to a file of up to 100 MiB                      |
+| `fetch <link> [-o <path>]` | Open a one-time link: save a file, or pipe a text value  |
 | `set <key> [value]`   | Save the pair and print a one-time link                       |
 | `get <key>`           | Print only the stored value (capture it: `$v = secret get k`) |
 | `link <key>`          | Fresh one-time link to a stored value                         |
@@ -93,6 +95,37 @@ Get-Content .\cert.pem -Raw | secret set tls-cert -
 ```
 
 Values with spaces inside the session go in quotes: `set note "two words"`.
+
+## Files
+
+```text
+> secret share --file .\backup.sql
+Uploading backup.sql: 0% of 42.3 MiB
+Uploading backup.sql: 18% of 42.3 MiB
+…
+Uploading backup.sql: 100% of 42.3 MiB
+https://<server>/s/…
+curl -X POST -OJ https://<server>/s/…
+Valid for 5 minutes, opens once.
+```
+
+`share --file` sends a file of up to 100 MiB in 8 MiB parts and prints the same
+three lines as `share`; progress goes to stderr, so `$link = secret share --file x`
+captures only the link lines. The link lives as long as your **ttl** setting and
+downloads exactly once; the file is then deleted from the server. Missing, empty
+or larger files are refused before anything is sent (exit 64).
+
+`fetch` opens a link someone gave you; it needs no login and works with links
+from any server:
+
+| Link holds | Without `-o`                                              | With `-o <path>`     |
+| ---------- | --------------------------------------------------------- | -------------------- |
+| a file     | saved in the current folder under its own name; an existing file is never overwritten (`report (1).pdf`) | saved to `<path>` |
+| text       | printed, but **only** when the output is piped or redirected (`secret fetch <link> \| clip`) | written to `<path>` |
+
+On a terminal, `fetch` refuses to print a text secret onto the screen and exits
+64 **before** opening the link, so it stays valid. The recipient without the
+utility runs `curl -X POST -OJ <link>`, which also keeps the file name.
 
 ## Piped use and scripts
 

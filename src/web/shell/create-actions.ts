@@ -19,6 +19,7 @@ import { setTtl } from './actions/set-ttl.ts';
 import { share } from './actions/share.ts';
 import { drop } from './actions/drop.ts';
 import { unlinkTelegram } from './actions/unlink-telegram.ts';
+import { createFileActions } from './create-file-actions.ts';
 import type { ShellActions } from './shell-actions.ts';
 
 export const createActions = (deps: ActionDeps): ShellActions => ({
@@ -36,6 +37,7 @@ export const createActions = (deps: ActionDeps): ShellActions => ({
   logout: logout(deps),
   share: share(deps),
   drop: drop(deps),
+  ...createFileActions(deps),
   linkFor: linkFor(deps),
   setRowMode: setRowMode(deps),
   saveValue: saveValue(deps),
