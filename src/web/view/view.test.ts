@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 import type { Actions } from './actions.ts';
 import { formatDate } from './format-date.ts';
 import { createH } from './h.ts';
@@ -13,6 +13,10 @@ import { ttlLabel } from './ttl-label.ts';
 import { initialState } from '../state/initial-state.ts';
 
 GlobalRegistrator.register();
+/* happy-dom swaps Request, Response and Headers for browser versions that drop
+   cookie, origin and content-length. All test files share one process, so give
+   the real ones back before the next file runs. */
+afterAll(() => GlobalRegistrator.unregister());
 const h = createH(globalThis.document);
 
 const calls: string[] = [];
