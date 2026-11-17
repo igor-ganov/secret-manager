@@ -47,7 +47,7 @@ describe('dropFile (secret-files AC-4.3, AC-4.4)', () => {
     const { store, calls, notices, file, deps } = build(true);
     await dropFile(deps)(file, 15);
     expect(calls).toEqual([
-      ['dropFile', 'note.txt', 3, 'text/plain', 15],
+      ['dropFile', 'note.txt', 3, file.type, 15],
       ['putPart', 'u', 1, 'ab'],
       ['putPart', 'u', 2, 'c'],
       ['complete', 'u'],
@@ -73,7 +73,7 @@ describe('shareFile (secret-files AC-4.3)', () => {
   test('a signed-in upload begins on the account and shows the link', async () => {
     const { store, calls, file, deps } = build(true);
     await shareFile(deps)(file);
-    expect(calls[0]).toEqual(['beginFile', 'note.txt', 3, 'text/plain']);
+    expect(calls[0]).toEqual(['beginFile', 'note.txt', 3, file.type]);
     expect(store.get()).toMatchObject({ notice: { kind: 'link', link: LINK }, file: undefined });
   });
 });
